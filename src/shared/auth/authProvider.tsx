@@ -2,8 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { generateSecureToken, ValidationError } from '../utils/validation';
-import { prisma } from '@/lib/database';
-import bcrypt from 'bcryptjs';
 
 // Types
 export interface User {
@@ -77,54 +75,17 @@ class AuthAPI {
   async login(email: string, password: string): Promise<{ user: User; token: string }> {
     await this.delay(500); // Simulate network delay
     
-    try {
-      // Find user by email or username in real Prisma database
-      const dbUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: email.toLowerCase() },
-            { username: email.toLowerCase() }
-          ]
-        }
-      });
-      
-      if (!dbUser) {
-        throw new ValidationError('Invalid email or password');
-      }
-
-      // Check if account is active
-      if (!dbUser.isActive) {
-        throw new ValidationError('Account is deactivated');
-      }
-
-      // Verify password using bcrypt
-      const isValidPassword = await bcrypt.compare(password, dbUser.passwordHash);
-      
-      if (!isValidPassword) {
-        throw new ValidationError('Invalid email or password');
-      }
-
-      // Update last activity
-      await prisma.user.update({
-        where: { id: dbUser.id },
-        data: { lastActivity: new Date() }
-      });
-
-      const token = generateSecureToken(64);
-      const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-      
-      this.tokens.set(token, { userId: dbUser.id, expires });
-      
-      // Convert to auth User format
-      const authUser: User = {
-        id: dbUser.id,
-        email: dbUser.email,
-        username: dbUser.username,
-        firstName: dbUser.username, // Use username as firstName for now
-        lastName: '',
-        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
-        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
-        createdAt: dbUser.createdAt.toISOString(),
+    // For demo purposes, use predefined user credentials
+    const demoUsers: Record<string, User> = {
+      'john@example.com': {
+        id: 'user_john',
+        email: 'john@example.com',
+        username: 'john_trader',
+        firstName: 'John',
+        lastName: 'Trader',
+        role: 'premium',
+        subscriptionStatus: 'premium',
+        createdAt: '2024-01-15T00:00:00.000Z',
         lastLogin: new Date().toISOString(),
         settings: {
           theme: 'system',
@@ -132,62 +93,16 @@ class AuthAPI {
           defaultStake: 100,
           preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
         }
-      };
-      
-      return { user: authUser, token };
-      
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      console.error('Database login error:', error);
-      throw new ValidationError('Login failed due to system error');
-    }
-  }
-
-  async register(userData: RegisterData): Promise<{ user: User; token: string }> {
-    await this.delay(700);
-    
-    try {
-      // Check if email already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email: userData.email.toLowerCase() }
-      });
-      
-      if (existingUser) {
-        throw new ValidationError('Email already registered');
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(userData.password, 10);
-
-      // Create new user in database
-      const newUser = await prisma.user.create({
-        data: {
-          email: userData.email.toLowerCase(),
-          username: userData.username,
-          passwordHash,
-          role: 'basic',
-          subscriptionStatus: 'active',
-          subscriptionExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days trial
-          emailVerified: true,
-          isActive: true
-        }
-      });
-
-      const token = generateSecureToken(64);
-      const expires = Date.now() + (24 * 60 * 60 * 1000);
-      this.tokens.set(token, { userId: newUser.id, expires });
-
-      const authUser: User = {
-        id: newUser.id,
-        email: newUser.email,
-        username: newUser.username,
-        firstName: newUser.username,
-        lastName: '',
-        role: newUser.role as 'admin' | 'premium' | 'basic' | 'pro',
-        subscriptionStatus: newUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
-        createdAt: newUser.createdAt.toISOString(),
+      },
+      'sarah@example.com': {
+        id: 'user_sarah',
+        email: 'sarah@example.com',
+        username: 'sarah_sports',
+        firstName: 'Sarah',
+        lastName: 'Sports',
+        role: 'basic',
+        subscriptionStatus: 'basic',
+        createdAt: '2024-02-01T00:00:00.000Z',
         lastLogin: new Date().toISOString(),
         settings: {
           theme: 'system',
@@ -195,16 +110,53 @@ class AuthAPI {
           defaultStake: 50,
           preferredBookmakers: ['draftkings', 'betmgm']
         }
-      };
-
-      return { user: authUser, token };
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
+      },
+      'mike@example.com': {
+        id: 'user_mike',
+        email: 'mike@example.com',
+        username: 'mike_pro',
+        firstName: 'Mike',
+        lastName: 'Pro',
+        role: 'pro',
+        subscriptionStatus: 'pro',
+        createdAt: '2024-03-10T00:00:00.000Z',
+        lastLogin: new Date().toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,
+          defaultStake: 200,
+          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel', 'caesars']
+        }
       }
-      console.error('Registration error:', error);
-      throw new ValidationError('Registration failed due to system error');
+    };
+
+    const demoPasswords: Record<string, string> = {
+      'john@example.com': 'user123',
+      'sarah@example.com': 'user123', 
+      'mike@example.com': 'user123'
+    };
+
+    const user = demoUsers[email.toLowerCase()];
+    const validPassword = demoPasswords[email.toLowerCase()];
+
+    if (!user || password !== validPassword) {
+      throw new ValidationError('Invalid email or password');
     }
+
+    const token = generateSecureToken(64);
+    const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+    
+    this.tokens.set(token, { userId: user.id, expires });
+    
+    return { user, token };
+  }
+
+  async register(userData: RegisterData): Promise<{ user: User; token: string }> {
+    await this.delay(700);
+    
+    // For now, registration is not implemented on the backend
+    // Return a demo response
+    throw new ValidationError('Registration is currently not available. Please use existing demo accounts.');
   }
 
   async verifyToken(token: string): Promise<User | null> {
@@ -216,32 +168,9 @@ class AuthAPI {
         return null;
       }
 
-      const dbUser = await prisma.user.findUnique({
-        where: { id: tokenData.userId }
-      });
-      
-      if (!dbUser || !dbUser.isActive) return null;
-
-      // Convert to auth User format
-      const authUser: User = {
-        id: dbUser.id,
-        email: dbUser.email,
-        username: dbUser.username,
-        firstName: dbUser.username,
-        lastName: '',
-        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
-        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
-        createdAt: dbUser.createdAt.toISOString(),
-        lastLogin: dbUser.lastActivity.toISOString(),
-        settings: {
-          theme: 'system',
-          notifications: true,  
-          defaultStake: 100,
-          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
-        }
-      };
-
-      return authUser;
+      // For demo purposes, if token is valid in memory, assume user is valid
+      // In production, you'd validate against the server
+      return null; // Force re-login for now
     } catch (error) {
       console.error('Token verification error:', error);
       return null;
@@ -251,61 +180,15 @@ class AuthAPI {
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
     await this.delay(300);
     
-    try {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: userId }
-      });
-      
-      if (!dbUser) {
-        throw new ValidationError('User not found');
-      }
-
-      // For now, just return the current user since profile updates are not the focus
-      // In production, you'd update the database with the changes
-      const authUser: User = {
-        id: dbUser.id,
-        email: dbUser.email,
-        username: dbUser.username,
-        firstName: dbUser.username,
-        lastName: '',
-        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
-        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
-        createdAt: dbUser.createdAt.toISOString(),
-        lastLogin: dbUser.lastActivity.toISOString(),
-        settings: {
-          theme: 'system',
-          notifications: true,
-          defaultStake: 100,
-          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
-        }
-      };
-
-      return authUser;
-    } catch (error) {
-      console.error('Update profile error:', error);
-      throw new ValidationError('Failed to update profile');
-    }
+    // For demo purposes, profile updates not implemented
+    throw new ValidationError('Profile updates not implemented in demo');
   }
 
   async resetPassword(email: string): Promise<void> {
     await this.delay(500);
     
-    try {
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
-      });
-      
-      if (!user) {
-        // Don't reveal if email exists for security
-        return;
-      }
-
-      // In production, send actual reset email
-      console.log(`Password reset email sent to ${email}`);
-    } catch (error) {
-      console.error('Reset password error:', error);
-      // Don't throw error for security reasons
-    }
+    // For demo purposes, just log the action
+    console.log(`Password reset email would be sent to ${email}`);
   }
 
   private delay(ms: number): Promise<void> {
