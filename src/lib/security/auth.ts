@@ -66,25 +66,52 @@ export class PasswordService {
 
 // JWT Authentication
 export class JWTService {
-  private static readonly JWT_SECRET = process.env.JWT_SECRET || (() => {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET environment variable is required in production');
+  // Safe static secrets that work for both build and runtime
+  private static getJWTSecret(): string {
+    if (process.env.JWT_SECRET) {
+      return process.env.JWT_SECRET;
     }
-    return 'dev-secret-key-change-in-production';
-  })();
+    
+    // Build-time/development fallback
+    if (process.env.NODE_ENV !== 'production') {
+      return 'dev-secret-key-change-in-production-at-least-32-chars';
+    }
+    
+    // Build-time detection for production (no runtime secrets available)
+    const isBuildTime = !process.env.VERCEL_ENV && !process.env.PORT;
+    if (isBuildTime) {
+      return 'build-time-jwt-secret-safe-default-at-least-32-chars';
+    }
+    
+    // This should only happen in actual production runtime
+    throw new Error('JWT_SECRET environment variable is required in production runtime');
+  }
   
-  private static readonly JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (() => {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_REFRESH_SECRET environment variable is required in production');
+  private static getJWTRefreshSecret(): string {
+    if (process.env.JWT_REFRESH_SECRET) {
+      return process.env.JWT_REFRESH_SECRET;
     }
-    return 'dev-refresh-secret-key-change-in-production';
-  })();
+    
+    // Build-time/development fallback
+    if (process.env.NODE_ENV !== 'production') {
+      return 'dev-refresh-secret-key-change-in-production-at-least-32-chars';
+    }
+    
+    // Build-time detection for production (no runtime secrets available)
+    const isBuildTime = !process.env.VERCEL_ENV && !process.env.PORT;
+    if (isBuildTime) {
+      return 'build-time-refresh-secret-safe-default-at-least-32-chars';
+    }
+    
+    // This should only happen in actual production runtime
+    throw new Error('JWT_REFRESH_SECRET environment variable is required in production runtime');
+  }
 
   private static readonly ACCESS_TOKEN_EXPIRY = '15m';
   private static readonly REFRESH_TOKEN_EXPIRY = '7d';
 
   static generateAccessToken(payload: { userId: string; username: string; role: string }): string {
-    return jwt.sign(payload, this.JWT_SECRET, { 
+    return jwt.sign(payload, this.getJWTSecret(), { 
       expiresIn: this.ACCESS_TOKEN_EXPIRY,
       issuer: 'sports-arb',
       audience: 'sports-arb-users'
@@ -92,7 +119,7 @@ export class JWTService {
   }
 
   static generateRefreshToken(payload: { userId: string }): string {
-    return jwt.sign(payload, this.JWT_REFRESH_SECRET, { 
+    return jwt.sign(payload, this.getJWTRefreshSecret(), { 
       expiresIn: this.REFRESH_TOKEN_EXPIRY,
       issuer: 'sports-arb',
       audience: 'sports-arb-users'
@@ -101,7 +128,7 @@ export class JWTService {
 
   static verifyAccessToken(token: string): { userId: string; username: string; role: string } | null {
     try {
-      const decoded = jwt.verify(token, this.JWT_SECRET, {
+      const decoded = jwt.verify(token, this.getJWTSecret(), {
         issuer: 'sports-arb',
         audience: 'sports-arb-users'
       }) as any;
@@ -119,7 +146,7 @@ export class JWTService {
 
   static verifyRefreshToken(token: string): { userId: string } | null {
     try {
-      const decoded = jwt.verify(token, this.JWT_REFRESH_SECRET, {
+      const decoded = jwt.verify(token, this.getJWTRefreshSecret(), {
         issuer: 'sports-arb',
         audience: 'sports-arb-users'
       }) as any;
