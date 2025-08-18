@@ -117,7 +117,7 @@ function findArbitrageOpportunity(marketData: any[], game: any, market: string) 
   if (market !== 'h2h' || marketData.length < 2) return null;
   
   // Get all possible outcomes
-  const outcomeNames = marketData[0].outcomes.map((o: any) => o.name);
+  const outcomeNames = (marketData as Record<string, unknown>)[0].outcomes.map((o: any) => o.name);
   
   let bestCombination = null;
   let bestProfitMargin = 0;
@@ -125,8 +125,8 @@ function findArbitrageOpportunity(marketData: any[], game: any, market: string) 
   // Try all combinations of bookmakers for different outcomes
   for (let i = 0; i < marketData.length; i++) {
     for (let j = i + 1; j < marketData.length; j++) {
-      const bookmaker1 = marketData[i];
-      const bookmaker2 = marketData[j];
+      const bookmaker1 = (marketData as Record<string, unknown>)[i];
+      const bookmaker2 = (marketData as Record<string, unknown>)[j];
       
       // Check if we can create an arbitrage
       for (const outcome1 of bookmaker1.outcomes) {

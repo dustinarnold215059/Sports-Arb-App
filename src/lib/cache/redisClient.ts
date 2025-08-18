@@ -267,6 +267,8 @@ class RedisCache {
    */
   async disconnect(): Promise<void> {
     try {
+      this.stopCleanupTimer();
+      
       if (this.client && this.connected) {
         await this.client.disconnect();
         console.log('✅ Redis disconnected');
@@ -277,12 +279,24 @@ class RedisCache {
   }
 
   // Fallback methods for when Redis is unavailable
-  private fallbackCache = new Map<string, { value: any; expires?: number }>();
+  private fallbackCache = new Map<string, { value: any; expires?: number; lastAccess: number }>();
+  private readonly MAX_FALLBACK_ENTRIES = 1000; // Prevent memory leaks
+  private readonly FALLBACK_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private cleanupTimer?: NodeJS.Timeout;
+  private fallbackStats = { hits: 0, misses: 0, evictions: 0 };
 
   private fallbackSet(key: string, value: any, options: CacheOptions = {}): boolean {
     const cacheKey = options.prefix ? `${options.prefix}:${key}` : key;
     const expires = options.ttl ? Date.now() + (options.ttl * 1000) : undefined;
-    this.fallbackCache.set(cacheKey, { value, expires });
+    const now = Date.now();
+    
+    // Check if we need to evict entries
+    if (this.fallbackCache.size >= this.MAX_FALLBACK_ENTRIES) {
+      this.evictLRUEntries();
+    }
+    
+    this.fallbackCache.set(cacheKey, { value, expires, lastAccess: now });
+    this.startCleanupTimer();
     return true;
   }
 
@@ -290,12 +304,21 @@ class RedisCache {
     const cacheKey = options.prefix ? `${options.prefix}:${key}` : key;
     const cached = this.fallbackCache.get(cacheKey);
     
-    if (!cached) return null;
+    if (!cached) {
+      this.fallbackStats.misses++;
+      return null;
+    }
     
     if (cached.expires && Date.now() > cached.expires) {
       this.fallbackCache.delete(cacheKey);
+      this.fallbackStats.misses++;
       return null;
     }
+    
+    // Update last access time for LRU
+    cached.lastAccess = Date.now();
+    this.fallbackCache.set(cacheKey, cached);
+    this.fallbackStats.hits++;
     
     return cached.value as T;
   }
@@ -316,6 +339,10 @@ class RedisCache {
       return false;
     }
     
+    // Update last access time
+    cached.lastAccess = Date.now();
+    this.fallbackCache.set(cacheKey, cached);
+    
     return true;
   }
 
@@ -326,6 +353,7 @@ class RedisCache {
     if (!cached) return false;
     
     cached.expires = Date.now() + (seconds * 1000);
+    cached.lastAccess = Date.now();
     this.fallbackCache.set(cacheKey, cached);
     return true;
   }
@@ -336,17 +364,84 @@ class RedisCache {
 
   private fallbackStats(): CacheStats {
     return {
-      hits: 0,
-      misses: 0,
+      hits: this.fallbackStats.hits,
+      misses: this.fallbackStats.misses,
       keys: this.fallbackCache.size,
-      memory: 'in-memory',
+      memory: `in-memory (~${Math.round(this.fallbackCache.size * 0.5)}KB)`,
       uptime: 0
     };
   }
 
   private fallbackClear(): boolean {
     this.fallbackCache.clear();
+    this.fallbackStats = { hits: 0, misses: 0, evictions: 0 };
+    this.stopCleanupTimer();
     return true;
+  }
+  
+  /**
+   * Evict least recently used entries when cache is full
+   */
+  private evictLRUEntries(): void {
+    if (this.fallbackCache.size <= this.MAX_FALLBACK_ENTRIES * 0.8) return;
+    
+    // Convert to array and sort by lastAccess
+    const entries = Array.from(this.fallbackCache.entries());
+    entries.sort((a, b) => a[1].lastAccess - b[1].lastAccess);
+    
+    // Remove oldest 20% of entries
+    const toRemove = Math.floor(this.MAX_FALLBACK_ENTRIES * 0.2);
+    for (let i = 0; i < toRemove && i < entries.length; i++) {
+      this.fallbackCache.delete(entries[i][0]);
+      this.fallbackStats.evictions++;
+    }
+    
+    console.log(`🧹 Evicted ${toRemove} LRU entries from fallback cache`);
+  }
+  
+  /**
+   * Clean up expired entries from fallback cache
+   */
+  private cleanupExpiredEntries(): void {
+    const now = Date.now();
+    let expiredCount = 0;
+    
+    for (const [key, entry] of this.fallbackCache.entries()) {
+      if (entry.expires && now > entry.expires) {
+        this.fallbackCache.delete(key);
+        expiredCount++;
+      }
+    }
+    
+    if (expiredCount > 0) {
+      console.log(`🧹 Cleaned up ${expiredCount} expired entries from fallback cache`);
+    }
+  }
+  
+  /**
+   * Start periodic cleanup timer
+   */
+  private startCleanupTimer(): void {
+    if (this.cleanupTimer) return;
+    
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupExpiredEntries();
+      
+      // Also check for memory pressure
+      if (this.fallbackCache.size > this.MAX_FALLBACK_ENTRIES * 0.9) {
+        this.evictLRUEntries();
+      }
+    }, this.FALLBACK_CLEANUP_INTERVAL);
+  }
+  
+  /**
+   * Stop cleanup timer
+   */
+  private stopCleanupTimer(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
   }
 }
 

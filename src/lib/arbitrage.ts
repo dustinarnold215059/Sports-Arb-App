@@ -288,3 +288,20 @@ export function getBookmakerColor(bookmaker: string): { bg: string; text: string
   
   return colors[bookmaker] || { bg: 'bg-gray-50 dark:bg-gray-900/20', text: 'text-gray-800 dark:text-gray-300', border: 'border-gray-200 dark:border-gray-700' };
 }
+
+// Utility functions for test compatibility and general use
+export function decimalToAmerican(decimalOdds: number): number {
+  if (decimalOdds >= 2.0) {
+    return Math.round((decimalOdds - 1) * 100);
+  } else {
+    return Math.round(-100 / (decimalOdds - 1));
+  }
+}
+
+export function calculateImpliedProbability(americanOdds: number): number {
+  if (americanOdds > 0) {
+    return 100 / (americanOdds + 100);
+  } else {
+    return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
+  }
+}

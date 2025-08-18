@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     // Aggregate metrics by type
     const aggregated = metrics.reduce((acc, metric) => {
       const vitalsType = metric.metricName.replace('web_vital_', '');
-      if (!acc[vitalsType]) {
-        acc[vitalsType] = {
+      if (!(acc as Record<string, unknown>)[vitalsType]) {
+        (acc as Record<string, unknown>)[vitalsType] = {
           name: vitalsType,
           values: [],
           average: 0,
@@ -70,21 +70,21 @@ export async function GET(request: NextRequest) {
           p95: 0
         };
       }
-      acc[vitalsType].values.push(metric.metricValue);
+      (acc as Record<string, unknown>)[vitalsType].values.push(metric.metricValue);
       return acc;
     }, {} as any);
 
     // Calculate statistics
     Object.keys(aggregated).forEach(key => {
-      const values = aggregated[key].values.sort((a: number, b: number) => a - b);
+      const values = (aggregated as Record<string, unknown>)[key].values.sort((a: number, b: number) => a - b);
       const sum = values.reduce((a: number, b: number) => a + b, 0);
       
-      aggregated[key].average = sum / values.length;
-      aggregated[key].p75 = values[Math.floor(values.length * 0.75)] || 0;
-      aggregated[key].p95 = values[Math.floor(values.length * 0.95)] || 0;
+      (aggregated as Record<string, unknown>)[key].average = sum / values.length;
+      (aggregated as Record<string, unknown>)[key].p75 = values[Math.floor(values.length * 0.75)] || 0;
+      (aggregated as Record<string, unknown>)[key].p95 = values[Math.floor(values.length * 0.95)] || 0;
       
       // Remove raw values for response size
-      delete aggregated[key].values;
+      delete (aggregated as Record<string, unknown>)[key].values;
     });
 
     return NextResponse.json({

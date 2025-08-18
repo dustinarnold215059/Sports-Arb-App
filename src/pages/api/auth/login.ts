@@ -3,7 +3,8 @@ import { DatabaseUserService } from '@/lib/database/userService';
 import { sessionService } from '@/lib/cache/sessionService';
 import { rateLimiter } from '@/lib/middleware/rateLimiter';
 import { validateRequestBody } from '@/lib/middleware/validation';
-import { logRequest } from '@/lib/middleware/logging';
+import { logRequest, logSecurityEvent } from '@/lib/middleware/logging';
+import { csrfProtection } from '@/lib/middleware/csrf';
 import { z } from 'zod';
 
 const LoginSchema = z.object({
@@ -19,6 +20,21 @@ const LoginSchema = z.object({
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Apply middleware
   await logRequest(req, res);
+  
+  // Apply CSRF protection
+  const csrf = csrfProtection();
+  await new Promise<void>((resolve, reject) => {
+    csrf(req, res, (error?: any) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  }).catch((error) => {
+    console.error('CSRF protection failed:', error);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'CSRF validation failed' 
+    });
+  });
   
   if (req.method !== 'POST') {
     return res.status(405).json({ 

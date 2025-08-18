@@ -11,7 +11,8 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   requirePremium?: boolean;
   allowDemo?: boolean;
-  requireProOrAdmin?: boolean; // Only allow Pro or Admin users
+  requireProOrAdmin?: boolean;
+  requireAdmin?: boolean; // Add missing prop
 }
 
 export function ProtectedRoute({ 

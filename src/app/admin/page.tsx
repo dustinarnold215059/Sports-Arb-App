@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ModernCard, ModernCardHeader, ModernCardBody } from "../../shared/components/ui/ModernCard";
 import { ModernButton, NeonButton } from "../../shared/components/ui/ModernButton";
 import { ModernBadge } from "../../shared/components/ui/ModernBadge";
+import { AdminDashboardSkeleton } from "../../shared/components/ui/LoadingSkeleton";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface UserStats {
   totalBets: number;
@@ -82,10 +84,13 @@ export default function AdminPage() {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    
     try {
       // Get portfolio data from client-side betTracker for each user
-      const clientPortfolioData: { [userId: string]: any } = {};
+      const clientPortfolioData: { [userId: string]: unknown } = {};
       
       // Import betTracker on client side
       const { betTracker } = await import('@/lib/betTracking');
@@ -125,8 +130,11 @@ export default function AdminPage() {
       }
     } catch (err) {
       setError('Failed to fetch users');
+      console.error('Fetch users error:', err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   const updateUserRole = async (userId: string, role: string, subscriptionStatus: string, expiryDays: number) => {
     try {
@@ -233,8 +241,35 @@ export default function AdminPage() {
     );
   }
 
+  // Show loading skeleton while fetching data  
+  if (isAuthenticated && loading && users.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gradient">🛡️ Admin Dashboard</h1>
+                <p className="text-gray-400 text-sm">Loading system data...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <AdminDashboardSkeleton />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('Admin Dashboard Error:', error, errorInfo);
+        // Could integrate with error tracking service here
+      }}
+    >
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
       <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -509,5 +544,6 @@ export default function AdminPage() {
         )}
       </div>
     </div>
+    </ErrorBoundary>
   );
 }
