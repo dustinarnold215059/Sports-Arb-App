@@ -211,9 +211,9 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
 
               // Track best odds
               const bestKey = key === 'home' ? 'homeWin' : 'awayWin';
-              if (!processedGame.(bestOdds as Record<string, unknown>)[bestKey].odds || 
-                  outcome.price > processedGame.(bestOdds as Record<string, unknown>)[bestKey].odds) {
-                processedGame.(bestOdds as Record<string, unknown>)[bestKey] = {
+              if (!(processedGame.bestOdds as Record<string, any>)[bestKey]?.odds || 
+                  outcome.price > (processedGame.bestOdds as Record<string, any>)[bestKey].odds) {
+                (processedGame.bestOdds as Record<string, any>)[bestKey] = {
                   odds: outcome.price,
                   bookmaker: bookmaker.title,
                   market: 'moneyline'
@@ -225,7 +225,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'spreads':
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}_${outcome.point || 0}`;
-              processedGame.marketSummary.(spreads as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.spreads as Record<string, any>)[key] = {
                 odds: outcome.price,
                 points: outcome.point,
                 bookmaker: bookmaker.title,
@@ -238,7 +238,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'totals':
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}_${outcome.point || 0}`;
-              processedGame.marketSummary.(totals as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.totals as Record<string, any>)[key] = {
                 odds: outcome.price,
                 points: outcome.point,
                 bookmaker: bookmaker.title,
@@ -251,7 +251,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'btts': // Both Teams To Score
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}`;
-              processedGame.marketSummary.(btts as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.btts as Record<string, any>)[key] = {
                 odds: outcome.price,
                 bookmaker: bookmaker.title,
                 outcome: outcome.name, // Yes/No
@@ -275,7 +275,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'team_totals': // Individual team totals
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}_${outcome.point || 0}`;
-              processedGame.marketSummary.(team_totals as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.team_totals as Record<string, any>)[key] = {
                 odds: outcome.price,
                 points: outcome.point,
                 bookmaker: bookmaker.title,
@@ -288,7 +288,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'alternate_spreads': // Alternative spreads
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}_${outcome.point || 0}`;
-              processedGame.marketSummary.(alternate_spreads as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.alternate_spreads as Record<string, any>)[key] = {
                 odds: outcome.price,
                 points: outcome.point,
                 bookmaker: bookmaker.title,
@@ -301,7 +301,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'alternate_totals': // Alternative totals
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}_${outcome.point || 0}`;
-              processedGame.marketSummary.(alternate_totals as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.alternate_totals as Record<string, any>)[key] = {
                 odds: outcome.price,
                 points: outcome.point,
                 bookmaker: bookmaker.title,
@@ -314,7 +314,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
           case 'outrights': // Championship/tournament winners
             market.outcomes?.forEach((outcome: any) => {
               const key = `${bookmaker.key}_${outcome.name}`;
-              processedGame.marketSummary.(outrights as Record<string, unknown>)[key] = {
+              (processedGame.marketSummary.outrights as Record<string, any>)[key] = {
                 odds: outcome.price,
                 bookmaker: bookmaker.title,
                 participant: outcome.name,
@@ -327,7 +327,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
             // Enhanced processing for player props with proper structure
             if (market.player_name && market.prop_name) {
               const propKey = `${bookmaker.key}_${market.player_name}_${market.prop_name}`;
-              processedGame.marketSummary.(player_props as Record<string, unknown>)[propKey] = {
+              (processedGame.marketSummary.player_props as Record<string, any>)[propKey] = {
                 player: market.player_name,
                 prop: market.prop_name,
                 bookmaker: bookmaker.title,
@@ -336,7 +336,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
               };
               
               market.outcomes?.forEach((outcome: any) => {
-                processedGame.marketSummary.(player_props as Record<string, unknown>)[propKey].outcomes[outcome.name] = {
+                (processedGame.marketSummary.player_props as Record<string, any>)[propKey].outcomes[outcome.name] = {
                   odds: outcome.price,
                   point: outcome.point || market.point,
                   description: outcome.description
@@ -346,7 +346,7 @@ function processOptimizedOddsData(rawData: any[], sport: string) {
               // Fallback processing for different player props structures
               market.outcomes?.forEach((outcome: any) => {
                 const key = `${bookmaker.key}_${outcome.description || outcome.name}_${outcome.point || 0}`;
-                processedGame.marketSummary.(player_props as Record<string, unknown>)[key] = {
+                (processedGame.marketSummary.player_props as Record<string, any>)[key] = {
                   odds: outcome.price,
                   bookmaker: bookmaker.title,
                   player: outcome.player_name || 'Unknown Player',
