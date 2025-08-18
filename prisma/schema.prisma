@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  username           String    @unique
+  email              String    @unique
+  password           String
+  role               String    @default("basic") // basic, premium, pro, admin
+  subscriptionStatus String    @default("inactive") // active, inactive, cancelled
+  subscriptionExpiry DateTime?
+  apiRequestsUsed    Int       @default(0)
+  apiRequestsLimit   Int       @default(100)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastActivity       DateTime  @default(now())
+  
+  // Relations
+  bets               Bet[]
+  portfolios         Portfolio[]
+  
+  @@map("users")
+}
+
+model Bet {
+  id                String    @id @default(cuid())
+  userId            String
+  game              String
+  bookmaker         String
+  betType           String
+  odds              String
+  stake             Float
+  potentialWin      Float
+  status            String    @default("pending") // pending, won, lost, void
+  profit            Float?
+  timestamp         DateTime  @default(now())
+  arbitrageGroup    String?
+  sport             String?
+  league            String?
+  homeTeam          String?
+  awayTeam          String?
+  commenceTime      DateTime?
+  notes             String?
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("bets")
+}
+
+model Portfolio {
+  id                    String   @id @default(cuid())
+  userId                String
+  netProfit             Float    @default(0)
+  totalStaked           Float    @default(0)
+  totalBets             Int      @default(0)
+  winningBets           Int      @default(0)
+  losingBets            Int      @default(0)
+  pendingBets           Int      @default(0)
+  winRate               Float    @default(0)
+  profitRate            Float    @default(0)
+  arbitrageGroups       Int      @default(0)
+  arbitrageSuccessRate  Float    @default(0)
+  lastUpdated           DateTime @default(now())
+  
+  // Relations
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@map("portfolios")
+}
+
+model ApiCache {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  data      Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("api_cache")
+}
+
+model SystemMetrics {
+  id          String   @id @default(cuid())
+  metricName  String
+  metricValue Float
+  timestamp   DateTime @default(now())
+  
+  @@map("system_metrics")
+}
