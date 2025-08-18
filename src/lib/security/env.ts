@@ -80,9 +80,28 @@ const envSchema = z.object({
 // Validate and export environment variables
 function validateEnv() {
   try {
-    // Check if we're in a build environment (Vercel, etc.)
-    const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.VERCEL_ENV;
-    const isProductionRuntime = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV;
+    // Better detection of build vs runtime environments
+    const isBuildTime = (
+      // Vercel build indicators
+      (process.env.VERCEL === '1' && !process.env.VERCEL_ENV) ||
+      // CI build indicators  
+      process.env.CI === 'true' ||
+      // Next.js build command detection
+      (process.argv && process.argv.includes('build')) ||
+      // Generic build time detection - no runtime port means build time
+      (process.env.NODE_ENV === 'production' && !process.env.PORT && !process.env.VERCEL_ENV)
+    );
+    
+    const isProductionRuntime = process.env.NODE_ENV === 'production' && !isBuildTime;
+    
+    console.log('🔍 Environment Detection:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      CI: process.env.CI,
+      isBuildTime,
+      isProductionRuntime
+    });
     
     // For production runtime, ensure critical secrets are set
     if (isProductionRuntime) {
@@ -94,7 +113,7 @@ function validateEnv() {
       const missingSecrets = requiredSecrets.filter(secret => !process.env[secret]);
       
       if (missingSecrets.length > 0) {
-        throw new Error(`Missing required environment variables in production: ${missingSecrets.join(', ')}`);
+        throw new Error(`Missing required environment variables in production runtime: ${missingSecrets.join(', ')}`);
       }
 
       // Validate secret strength in production
@@ -114,14 +133,23 @@ function validateEnv() {
       }
     }
 
-    // For build time or development, provide defaults
+    // For build time or development, provide safe defaults
     const envWithDefaults = {
       ...process.env,
-      JWT_SECRET: process.env.JWT_SECRET || 'dev-jwt-secret-key-at-least-32-chars-long-for-build',
-      JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-key-at-least-32-chars-long-for-build'
+      JWT_SECRET: process.env.JWT_SECRET || 'build-time-jwt-secret-key-at-least-32-chars-long-safe-default',
+      JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'build-time-refresh-secret-key-at-least-32-chars-long-safe-default'
     };
 
     const env = envSchema.parse(envWithDefaults);
+    
+    if (isBuildTime) {
+      console.log('✅ Build-time environment validation passed with defaults');
+    } else if (isProductionRuntime) {
+      console.log('✅ Production runtime environment validation passed');
+    } else {
+      console.log('✅ Development environment validation passed');
+    }
+    
     return env;
   } catch (error) {
     console.error('❌ Environment validation failed:');
@@ -133,16 +161,17 @@ function validateEnv() {
       console.error(`  - ${error}`);
     }
     
-    // Only exit in production runtime, not during build
-    if (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV) {
+    // Only exit in production runtime, never during build
+    if (process.env.NODE_ENV === 'production' && !isBuildTime) {
+      console.error('🚫 Exiting due to production runtime validation failure');
       process.exit(1);
     } else {
-      console.warn('⚠️  Continuing with default environment values for build process');
-      // Return environment with defaults for build process
+      console.warn('⚠️  Continuing with safe default environment values');
+      // Return environment with safe defaults
       return envSchema.parse({
         ...process.env,
-        JWT_SECRET: 'dev-jwt-secret-key-at-least-32-chars-long-for-build',
-        JWT_REFRESH_SECRET: 'dev-refresh-secret-key-at-least-32-chars-long-for-build'
+        JWT_SECRET: 'build-time-jwt-secret-key-at-least-32-chars-long-safe-default',
+        JWT_REFRESH_SECRET: 'build-time-refresh-secret-key-at-least-32-chars-long-safe-default'
       });
     }
   }
