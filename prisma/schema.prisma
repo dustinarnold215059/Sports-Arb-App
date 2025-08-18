@@ -42,6 +42,8 @@ model User {
   @@index([email])
   @@index([username])
   @@index([isActive, isLocked])
+  @@index([createdAt])
+  @@index([lastActivity])
   @@map("users")
 }
 
@@ -52,10 +54,10 @@ model Bet {
   bookmaker         String
   betType           String
   odds              String
-  stake             Float
-  potentialWin      Float
+  stake             Decimal   @db.Decimal(10,2)
+  potentialWin      Decimal   @db.Decimal(10,2)
   status            String    @default("pending") // pending, won, lost, void
-  profit            Float?
+  profit            Decimal?  @db.Decimal(10,2)
   timestamp         DateTime  @default(now())
   arbitrageGroup    String?
   sport             String?
@@ -68,22 +70,27 @@ model Bet {
   // Relations
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // Performance indexes
+  @@index([userId, status])
+  @@index([userId, timestamp])
+  @@index([arbitrageGroup])
+  @@index([sport, league])
   @@map("bets")
 }
 
 model Portfolio {
   id                    String   @id @default(cuid())
   userId                String
-  netProfit             Float    @default(0)
-  totalStaked           Float    @default(0)
+  netProfit             Decimal  @default(0) @db.Decimal(12,2)
+  totalStaked           Decimal  @default(0) @db.Decimal(12,2)
   totalBets             Int      @default(0)
   winningBets           Int      @default(0)
   losingBets            Int      @default(0)
   pendingBets           Int      @default(0)
-  winRate               Float    @default(0)
-  profitRate            Float    @default(0)
+  winRate               Decimal  @default(0) @db.Decimal(5,4)
+  profitRate            Decimal  @default(0) @db.Decimal(5,4)
   arbitrageGroups       Int      @default(0)
-  arbitrageSuccessRate  Float    @default(0)
+  arbitrageSuccessRate  Decimal  @default(0) @db.Decimal(5,4)
   lastUpdated           DateTime @default(now())
   
   // Relations
@@ -100,13 +107,14 @@ model ApiCache {
   expiresAt DateTime
   createdAt DateTime @default(now())
   
+  @@index([key, expiresAt])
   @@map("api_cache")
 }
 
 model SystemMetrics {
   id          String   @id @default(cuid())
   metricName  String
-  metricValue Float
+  metricValue Decimal  @db.Decimal(15,4)
   metadata    Json?
   timestamp   DateTime @default(now())
   
