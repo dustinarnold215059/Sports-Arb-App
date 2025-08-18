@@ -309,7 +309,12 @@ export const userDatabase = {
 
   // Authenticate user
   authenticateUser(username: string, password: string): User | null {
+    console.log('Attempting to authenticate:', { username, password });
+    console.log('Available users:', users.map(u => ({ username: u.username, password: u.password })));
+    
     const user = users.find(u => u.username === username && u.password === password);
+    console.log('Found user:', user ? 'Yes' : 'No');
+    
     if (user) {
       // Update last login
       user.lastLogin = new Date();
