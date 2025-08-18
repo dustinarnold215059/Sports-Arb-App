@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { secureUserDatabase } from '@/lib/security/secureUserDatabase';
+import { databaseUserService } from '@/lib/security/databaseUserService';
 import { JWTService, RateLimitService, SecurityUtils, InputSanitizer } from '@/lib/security/auth';
 
 export async function POST(request: NextRequest) {
@@ -55,8 +55,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Authenticate user with secure database
-    const authResult = await secureUserDatabase.authenticateUser(cleanUsername, password);
+    // Initialize database service if needed
+    await databaseUserService.initialize();
+
+    // Authenticate user with database
+    const authResult = await databaseUserService.authenticateUser(cleanUsername, password);
 
     if (!authResult.success) {
       // Log failed attempt for monitoring

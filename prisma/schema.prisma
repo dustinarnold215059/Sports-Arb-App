@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -14,12 +14,22 @@ model User {
   id                 String    @id @default(cuid())
   username           String    @unique
   email              String    @unique
-  password           String
+  passwordHash       String    // Renamed from 'password' to be explicit about hashing
   role               String    @default("basic") // basic, premium, pro, admin
   subscriptionStatus String    @default("inactive") // active, inactive, cancelled
   subscriptionExpiry DateTime?
   apiRequestsUsed    Int       @default(0)
   apiRequestsLimit   Int       @default(100)
+  isActive           Boolean   @default(true)
+  isLocked           Boolean   @default(false)
+  failedLoginAttempts Int      @default(0)
+  lastFailedLogin    DateTime?
+  twoFactorEnabled   Boolean   @default(false)
+  twoFactorSecret    String?
+  emailVerified      Boolean   @default(false)
+  emailVerifyToken   String?
+  resetPasswordToken String?
+  resetPasswordExpiry DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   lastActivity       DateTime  @default(now())
@@ -27,7 +37,11 @@ model User {
   // Relations
   bets               Bet[]
   portfolios         Portfolio[]
+  sessions           UserSession[]
   
+  @@index([email])
+  @@index([username])
+  @@index([isActive, isLocked])
   @@map("users")
 }
 
@@ -93,7 +107,71 @@ model SystemMetrics {
   id          String   @id @default(cuid())
   metricName  String
   metricValue Float
+  metadata    Json?
   timestamp   DateTime @default(now())
   
+  @@index([metricName, timestamp])
   @@map("system_metrics")
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique
+  refreshToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  lastActivity DateTime @default(now())
+  
+  // Relations
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([sessionToken])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  count     Int      @default(1)
+  resetTime DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([key])
+  @@index([resetTime])
+  @@map("rate_limits")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model AppSettings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isPublic    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+  
+  @@map("app_settings")
 }

@@ -11,7 +11,14 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:setup": "node scripts/setup-database.js",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "node scripts/seed-database.js",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.13.0",
