@@ -469,6 +469,11 @@ export class BetTracker {
   // Local storage functions
   private saveToStorage(): void {
     try {
+      // Check if we're in browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+      }
+      
       localStorage.setItem('arbitrageBets', JSON.stringify(this.bets));
       localStorage.setItem('arbitrageGroups', JSON.stringify(this.arbitrageGroups));
     } catch (error) {
@@ -492,6 +497,11 @@ export class BetTracker {
 
   private loadFromStorage(): void {
     try {
+      // Check if we're in browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+      }
+      
       const betsData = localStorage.getItem('arbitrageBets');
       const groupsData = localStorage.getItem('arbitrageGroups');
       
