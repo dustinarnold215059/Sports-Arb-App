@@ -5,13 +5,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { username, password } = body;
-    
-    console.log('Admin login attempt:', { username, passwordLength: password?.length });
 
     // Authenticate user
     const user = userDatabase.authenticateUser(username, password);
-    
-    console.log('Authentication result:', user ? 'Success' : 'Failed');
 
     if (!user) {
       return NextResponse.json({
