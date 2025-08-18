@@ -26,7 +26,7 @@ export interface LiveOddsGame {
 // API configuration for The Odds API
 const THE_ODDS_API_CONFIG = {
   BASE_URL: 'https://api.the-odds-api.com/v4',
-  API_KEY: process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb',
+  API_KEY: process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '',
   REGIONS: 'us', // US bookmakers
   MARKETS: 'h2h,spreads,totals', // head-to-head, spreads, totals
   ODDS_FORMAT: 'american', // American odds format
