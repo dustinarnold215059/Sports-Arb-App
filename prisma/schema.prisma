@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -153,7 +154,7 @@ model AuditLog {
   userId    String?
   action    String
   resource  String?
-  details   Json?
+  metadata  Json?
   ipAddress String?
   userAgent String?
   timestamp DateTime @default(now())

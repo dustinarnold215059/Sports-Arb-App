@@ -18,7 +18,11 @@
     "db:seed": "node scripts/seed-database.js",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "db:prod-migrate": "prisma migrate deploy && node scripts/seed-production.js",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
+    "deploy:vercel": "vercel --prod",
+    "health-check": "node scripts/health-check.js"
   },
   "dependencies": {
     "@prisma/client": "^6.13.0",
