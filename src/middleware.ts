@@ -48,17 +48,9 @@ export function middleware(request: NextRequest) {
     return new Response(null, { status: 200, headers: response.headers });
   }
 
-  // Basic admin route protection (without JWT verification in middleware)
-  if (request.nextUrl.pathname.startsWith('/admin') && !request.nextUrl.pathname.startsWith('/api/admin/auth')) {
-    // Simple check for authentication cookie or header
-    const hasAuth = request.cookies.has('refreshToken') || request.headers.get('authorization');
-    
-    if (!hasAuth) {
-      // Redirect to admin login
-      const loginUrl = new URL('/admin', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
+  // Admin route protection - let the admin page handle its own authentication
+  // The admin page has its own login form and state management
+  // No middleware-level redirects needed for admin routes
 
   // Security logging for sensitive endpoints
   if (request.nextUrl.pathname.startsWith('/api/admin/') || 
