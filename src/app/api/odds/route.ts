@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { EnvManager } from '@/lib/security/env';
+import { RateLimitService, SecurityUtils } from '@/lib/security/auth';
+import { addSecurityHeaders } from '@/lib/security/middleware';
 
 const THE_ODDS_API_CONFIG = {
-  BASE_URL: 'https://api.the-odds-api.com/v4',
-  API_KEY: process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb',
+  BASE_URL: process.env.THE_ODDS_API_BASE_URL || 'https://api.the-odds-api.com/v4',
   REGIONS: 'us', // US bookmakers
   MARKETS: 'h2h,spreads,totals', // head-to-head, spreads, totals
   ODDS_FORMAT: 'american', // American odds format
@@ -10,23 +12,61 @@ const THE_ODDS_API_CONFIG = {
 };
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const sport = searchParams.get('sport') || 'basketball_nba'; // Default to NBA
-  
   try {
-    const apiKey = THE_ODDS_API_CONFIG.API_KEY;
-    
-    if (!apiKey || apiKey === 'your-api-key-here') {
-      console.error('❌ The Odds API key not configured');
-      return NextResponse.json({ error: 'The Odds API key not configured. Please check environment variables.' }, { status: 500 });
+    // Rate limiting
+    const clientIP = SecurityUtils.getClientIP(request);
+    const rateLimitKey = `odds_api:${clientIP}`;
+    const rateLimit = RateLimitService.checkRateLimit(rateLimitKey, 30, 60 * 1000); // 30 requests per minute
+
+    if (!rateLimit.allowed) {
+      const response = NextResponse.json({
+        error: 'Rate limit exceeded for odds API',
+        retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000)
+      }, { status: 429 });
+      
+      return addSecurityHeaders(response);
     }
 
-    // The Odds API endpoint for getting odds
-    const url = `${THE_ODDS_API_CONFIG.BASE_URL}/sports/${sport}/odds/?apiKey=${apiKey}&regions=${THE_ODDS_API_CONFIG.REGIONS}&markets=${THE_ODDS_API_CONFIG.MARKETS}&oddsFormat=${THE_ODDS_API_CONFIG.ODDS_FORMAT}&dateFormat=${THE_ODDS_API_CONFIG.DATE_FORMAT}`;
+    const searchParams = request.nextUrl.searchParams;
+    const sport = searchParams.get('sport') || 'basketball_nba';
+    
+    // Input validation
+    const allowedSports = [
+      'basketball_nba', 'americanfootball_nfl', 'baseball_mlb', 
+      'icehockey_nhl', 'soccer_epl', 'tennis_atp'
+    ];
+    
+    if (!allowedSports.includes(sport)) {
+      const response = NextResponse.json({ 
+        error: 'Invalid sport parameter',
+        allowed: allowedSports 
+      }, { status: 400 });
+      
+      return addSecurityHeaders(response);
+    }
 
-    console.log('🌐 Server-side API call to The Odds API');
-    console.log('🏀 Sport:', sport);
-    console.log('🔗 URL:', url.replace(apiKey, 'API_KEY_HIDDEN'));
+    // Get API key securely
+    const apiKey = EnvManager.getOddsAPIKey();
+    
+    if (!apiKey) {
+      EnvManager.log('error', 'The Odds API key not configured');
+      const response = NextResponse.json({ 
+        error: 'API configuration error' 
+      }, { status: 500 });
+      
+      return addSecurityHeaders(response);
+    }
+
+    // Build secure API URL
+    const url = new URL(`${THE_ODDS_API_CONFIG.BASE_URL}/sports/${sport}/odds/`);
+    url.searchParams.set('apiKey', apiKey);
+    url.searchParams.set('regions', THE_ODDS_API_CONFIG.REGIONS);
+    url.searchParams.set('markets', THE_ODDS_API_CONFIG.MARKETS);
+    url.searchParams.set('oddsFormat', THE_ODDS_API_CONFIG.ODDS_FORMAT);
+    url.searchParams.set('dateFormat', THE_ODDS_API_CONFIG.DATE_FORMAT);
+
+    EnvManager.log('info', 'Server-side API call to The Odds API', { sport });
+    EnvManager.log('debug', 'API URL (key hidden)', url.toString().replace(apiKey, '[HIDDEN]'));
 
     const response = await fetch(url, {
       method: 'GET',
