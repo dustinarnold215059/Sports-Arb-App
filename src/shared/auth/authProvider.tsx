@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { generateSecureToken, ValidationError } from '../utils/validation';
-import { userDatabase } from '@/lib/userDatabase';
+import { prisma } from '@/lib/database';
+import bcrypt from 'bcryptjs';
 
 // Types
 export interface User {
@@ -76,162 +77,235 @@ class AuthAPI {
   async login(email: string, password: string): Promise<{ user: User; token: string }> {
     await this.delay(500); // Simulate network delay
     
-    // Try to find user by email first, then by username
-    let dbUser = userDatabase.getUserByUsername(email); // email could be username
-    if (!dbUser) {
-      // Try to find by email (we'll need to search through users)
-      const allUsers = userDatabase.getAllUsers();
-      dbUser = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase()) || null;
-      if (dbUser) {
-        // Get the user with password for authentication
-        dbUser = userDatabase.getUserById(dbUser.id);
+    try {
+      // Find user by email or username in real Prisma database
+      const dbUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: email.toLowerCase() },
+            { username: email.toLowerCase() }
+          ]
+        }
+      });
+      
+      if (!dbUser) {
+        throw new ValidationError('Invalid email or password');
       }
-    }
-    
-    if (!dbUser || dbUser.password !== password) {
-      throw new ValidationError('Invalid email or password');
-    }
 
-    const token = generateSecureToken(64);
-    const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-    
-    this.tokens.set(token, { userId: dbUser.id, expires });
-    
-    // Convert to auth User format
-    const authUser: User = {
-      id: dbUser.id,
-      email: dbUser.email,
-      username: dbUser.username,
-      firstName: dbUser.username, // Use username as firstName for now
-      lastName: '',
-      role: dbUser.role, // Use the role directly from database
-      subscriptionStatus: dbUser.subscriptionStatus, // Use the subscription status directly from database
-      createdAt: dbUser.createdAt.toISOString(),
-      lastLogin: new Date().toISOString(),
-      settings: {
-        theme: 'system',
-        notifications: true,
-        defaultStake: 100,
-        preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
+      // Check if account is active
+      if (!dbUser.isActive) {
+        throw new ValidationError('Account is deactivated');
       }
-    };
-    
-    return { user: authUser, token };
+
+      // Verify password using bcrypt
+      const isValidPassword = await bcrypt.compare(password, dbUser.passwordHash);
+      
+      if (!isValidPassword) {
+        throw new ValidationError('Invalid email or password');
+      }
+
+      // Update last activity
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: { lastActivity: new Date() }
+      });
+
+      const token = generateSecureToken(64);
+      const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+      
+      this.tokens.set(token, { userId: dbUser.id, expires });
+      
+      // Convert to auth User format
+      const authUser: User = {
+        id: dbUser.id,
+        email: dbUser.email,
+        username: dbUser.username,
+        firstName: dbUser.username, // Use username as firstName for now
+        lastName: '',
+        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
+        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
+        createdAt: dbUser.createdAt.toISOString(),
+        lastLogin: new Date().toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,
+          defaultStake: 100,
+          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
+        }
+      };
+      
+      return { user: authUser, token };
+      
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      console.error('Database login error:', error);
+      throw new ValidationError('Login failed due to system error');
+    }
   }
 
   async register(userData: RegisterData): Promise<{ user: User; token: string }> {
     await this.delay(700);
     
-    if (this.users.has(userData.email.toLowerCase())) {
-      throw new ValidationError('Email already registered');
-    }
-
-    const newUser = {
-      id: generateSecureToken(16),
-      email: userData.email.toLowerCase(),
-      username: userData.username,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      password: userData.password, // In production, hash this
-      role: 'user' as const,
-      subscriptionStatus: 'free' as const,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      settings: {
-        theme: 'system' as const,
-        notifications: true,
-        defaultStake: 50,
-        preferredBookmakers: ['draftkings', 'betmgm']
+    try {
+      // Check if email already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email: userData.email.toLowerCase() }
+      });
+      
+      if (existingUser) {
+        throw new ValidationError('Email already registered');
       }
-    };
 
-    this.users.set(newUser.email, newUser);
-    
-    const token = generateSecureToken(64);
-    const expires = Date.now() + (24 * 60 * 60 * 1000);
-    this.tokens.set(token, { userId: newUser.id, expires });
+      // Hash password
+      const passwordHash = await bcrypt.hash(userData.password, 10);
 
-    const { password: _, ...userWithoutPassword } = newUser;
-    return { user: userWithoutPassword, token };
+      // Create new user in database
+      const newUser = await prisma.user.create({
+        data: {
+          email: userData.email.toLowerCase(),
+          username: userData.username,
+          passwordHash,
+          role: 'basic',
+          subscriptionStatus: 'active',
+          subscriptionExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days trial
+          emailVerified: true,
+          isActive: true
+        }
+      });
+
+      const token = generateSecureToken(64);
+      const expires = Date.now() + (24 * 60 * 60 * 1000);
+      this.tokens.set(token, { userId: newUser.id, expires });
+
+      const authUser: User = {
+        id: newUser.id,
+        email: newUser.email,
+        username: newUser.username,
+        firstName: newUser.username,
+        lastName: '',
+        role: newUser.role as 'admin' | 'premium' | 'basic' | 'pro',
+        subscriptionStatus: newUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
+        createdAt: newUser.createdAt.toISOString(),
+        lastLogin: new Date().toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,
+          defaultStake: 50,
+          preferredBookmakers: ['draftkings', 'betmgm']
+        }
+      };
+
+      return { user: authUser, token };
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      console.error('Registration error:', error);
+      throw new ValidationError('Registration failed due to system error');
+    }
   }
 
   async verifyToken(token: string): Promise<User | null> {
     await this.delay(200);
     
-    const tokenData = this.tokens.get(token);
-    if (!tokenData || tokenData.expires < Date.now()) {
+    try {
+      const tokenData = this.tokens.get(token);
+      if (!tokenData || tokenData.expires < Date.now()) {
+        return null;
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: tokenData.userId }
+      });
+      
+      if (!dbUser || !dbUser.isActive) return null;
+
+      // Convert to auth User format
+      const authUser: User = {
+        id: dbUser.id,
+        email: dbUser.email,
+        username: dbUser.username,
+        firstName: dbUser.username,
+        lastName: '',
+        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
+        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
+        createdAt: dbUser.createdAt.toISOString(),
+        lastLogin: dbUser.lastActivity.toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,  
+          defaultStake: 100,
+          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
+        }
+      };
+
+      return authUser;
+    } catch (error) {
+      console.error('Token verification error:', error);
       return null;
     }
-
-    const dbUser = userDatabase.getUserById(tokenData.userId);
-    if (!dbUser) return null;
-
-    // Convert to auth User format
-    const authUser: User = {
-      id: dbUser.id,
-      email: dbUser.email,
-      username: dbUser.username,
-      firstName: dbUser.username,
-      lastName: '',
-      role: dbUser.role === 'admin' ? 'admin' : dbUser.role === 'premium' ? 'premium' : 'user',
-      subscriptionStatus: dbUser.subscriptionStatus === 'premium' ? 'premium' : 
-                          dbUser.subscriptionStatus === 'basic' ? 'free' : 'free',
-      createdAt: dbUser.createdAt.toISOString(),
-      lastLogin: dbUser.lastLogin.toISOString(),
-      settings: {
-        theme: 'system',
-        notifications: true,  
-        defaultStake: 100,
-        preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
-      }
-    };
-
-    return authUser;
   }
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
     await this.delay(300);
     
-    const dbUser = userDatabase.getUserById(userId);
-    if (!dbUser) {
-      throw new ValidationError('User not found');
-    }
-
-    // For now, just return the current user since profile updates are not the focus
-    const authUser: User = {
-      id: dbUser.id,
-      email: dbUser.email,
-      username: dbUser.username,
-      firstName: dbUser.username,
-      lastName: '',
-      role: dbUser.role === 'admin' ? 'admin' : dbUser.role === 'premium' ? 'premium' : 'user',
-      subscriptionStatus: dbUser.subscriptionStatus === 'premium' ? 'premium' : 
-                          dbUser.subscriptionStatus === 'basic' ? 'free' : 'free',
-      createdAt: dbUser.createdAt.toISOString(),
-      lastLogin: dbUser.lastLogin.toISOString(),
-      settings: {
-        theme: 'system',
-        notifications: true,
-        defaultStake: 100,
-        preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+      
+      if (!dbUser) {
+        throw new ValidationError('User not found');
       }
-    };
 
-    return authUser;
+      // For now, just return the current user since profile updates are not the focus
+      // In production, you'd update the database with the changes
+      const authUser: User = {
+        id: dbUser.id,
+        email: dbUser.email,
+        username: dbUser.username,
+        firstName: dbUser.username,
+        lastName: '',
+        role: dbUser.role as 'admin' | 'premium' | 'basic' | 'pro',
+        subscriptionStatus: dbUser.subscriptionStatus as 'premium' | 'basic' | 'trial' | 'pro',
+        createdAt: dbUser.createdAt.toISOString(),
+        lastLogin: dbUser.lastActivity.toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,
+          defaultStake: 100,
+          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
+        }
+      };
+
+      return authUser;
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw new ValidationError('Failed to update profile');
+    }
   }
 
   async resetPassword(email: string): Promise<void> {
     await this.delay(500);
     
-    const allUsers = userDatabase.getAllUsers();
-    const user = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    if (!user) {
-      // Don't reveal if email exists for security
-      return;
-    }
+    try {
+      const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() }
+      });
+      
+      if (!user) {
+        // Don't reveal if email exists for security
+        return;
+      }
 
-    // In production, send actual reset email
-    console.log(`Password reset email sent to ${email}`);
+      // In production, send actual reset email
+      console.log(`Password reset email sent to ${email}`);
+    } catch (error) {
+      console.error('Reset password error:', error);
+      // Don't throw error for security reasons
+    }
   }
 
   private delay(ms: number): Promise<void> {
