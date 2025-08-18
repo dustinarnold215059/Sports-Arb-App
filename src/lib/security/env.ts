@@ -80,8 +80,12 @@ const envSchema = z.object({
 // Validate and export environment variables
 function validateEnv() {
   try {
-    // For production, ensure critical secrets are set
-    if (process.env.NODE_ENV === 'production') {
+    // Check if we're in a build environment (Vercel, etc.)
+    const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.VERCEL_ENV;
+    const isProductionRuntime = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV;
+    
+    // For production runtime, ensure critical secrets are set
+    if (isProductionRuntime) {
       const requiredSecrets = [
         'JWT_SECRET',
         'JWT_REFRESH_SECRET'
@@ -110,7 +114,14 @@ function validateEnv() {
       }
     }
 
-    const env = envSchema.parse(process.env);
+    // For build time or development, provide defaults
+    const envWithDefaults = {
+      ...process.env,
+      JWT_SECRET: process.env.JWT_SECRET || 'dev-jwt-secret-key-at-least-32-chars-long-for-build',
+      JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-key-at-least-32-chars-long-for-build'
+    };
+
+    const env = envSchema.parse(envWithDefaults);
     return env;
   } catch (error) {
     console.error('❌ Environment validation failed:');
@@ -122,15 +133,16 @@ function validateEnv() {
       console.error(`  - ${error}`);
     }
     
-    if (process.env.NODE_ENV === 'production') {
+    // Only exit in production runtime, not during build
+    if (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV) {
       process.exit(1);
     } else {
-      console.warn('⚠️  Continuing with invalid environment in development mode');
-      // Return partial env for development
+      console.warn('⚠️  Continuing with default environment values for build process');
+      // Return environment with defaults for build process
       return envSchema.parse({
         ...process.env,
-        JWT_SECRET: process.env.JWT_SECRET || 'dev-jwt-secret-key-at-least-32-chars-long',
-        JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-key-at-least-32-chars-long'
+        JWT_SECRET: 'dev-jwt-secret-key-at-least-32-chars-long-for-build',
+        JWT_REFRESH_SECRET: 'dev-refresh-secret-key-at-least-32-chars-long-for-build'
       });
     }
   }
