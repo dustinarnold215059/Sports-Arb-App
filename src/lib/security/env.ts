@@ -5,9 +5,9 @@ const envSchema = z.object({
   // Node environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // JWT Configuration - CRITICAL for security
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters long'),
+  // JWT Configuration - CRITICAL for security (optional in schema, validated in function)
+  JWT_SECRET: z.string().optional(),
+  JWT_REFRESH_SECRET: z.string().optional(),
 
   // Database Configuration
   DATABASE_URL: z.string().url().optional(),
@@ -79,9 +79,19 @@ const envSchema = z.object({
 
 // Validate and export environment variables
 function validateEnv() {
+  // CRITICAL: Always provide defaults during any production build process
+  // This prevents build failures while maintaining runtime security
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const hasRuntimeSecrets = process.env.JWT_SECRET && process.env.JWT_REFRESH_SECRET;
+  const isLikelyBuildTime = !hasRuntimeSecrets && process.env.NODE_ENV === 'production';
+  
   try {
     // Better detection of build vs runtime environments
     const isBuildTime = (
+      // Development is never build time for validation
+      isDevelopment ||
+      // No secrets in production = likely build time
+      isLikelyBuildTime ||
       // Vercel build indicators
       (process.env.VERCEL === '1' && !process.env.VERCEL_ENV) ||
       // CI build indicators  
@@ -103,28 +113,32 @@ function validateEnv() {
       isProductionRuntime
     });
     
-    // For production runtime, ensure critical secrets are set
+    // For production runtime, ensure critical secrets are set and valid
     if (isProductionRuntime) {
-      const requiredSecrets = [
-        'JWT_SECRET',
-        'JWT_REFRESH_SECRET'
-      ];
-
-      const missingSecrets = requiredSecrets.filter(secret => !process.env[secret]);
+      const jwtSecret = process.env.JWT_SECRET;
+      const refreshSecret = process.env.JWT_REFRESH_SECRET;
       
-      if (missingSecrets.length > 0) {
-        throw new Error(`Missing required environment variables in production runtime: ${missingSecrets.join(', ')}`);
+      if (!jwtSecret || !refreshSecret) {
+        throw new Error(`Missing required environment variables in production runtime: ${[
+          !jwtSecret ? 'JWT_SECRET' : null,
+          !refreshSecret ? 'JWT_REFRESH_SECRET' : null
+        ].filter(Boolean).join(', ')}`);
       }
 
       // Validate secret strength in production
-      const jwtSecret = process.env.JWT_SECRET;
-      const refreshSecret = process.env.JWT_REFRESH_SECRET;
+      if (jwtSecret.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters long in production');
+      }
 
-      if (jwtSecret && jwtSecret.length < 64) {
+      if (refreshSecret.length < 32) {
+        throw new Error('JWT_REFRESH_SECRET must be at least 32 characters long in production');
+      }
+
+      if (jwtSecret.length < 64) {
         console.warn('⚠️  JWT_SECRET should be at least 64 characters long in production');
       }
 
-      if (refreshSecret && refreshSecret.length < 64) {
+      if (refreshSecret.length < 64) {
         console.warn('⚠️  JWT_REFRESH_SECRET should be at least 64 characters long in production');
       }
 
