@@ -66,11 +66,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { identifier, password, rememberMe } = validationResult.data;
 
-    // Initialize user service
-    const userService = new DatabaseUserService();
-    
-    // Authenticate user
-    const authResult = await userService.authenticateUser(identifier, password);
+    // Authenticate user (static method)
+    const authResult = await DatabaseUserService.authenticateUser(identifier, password);
     
     if (!authResult.success || !authResult.user) {
       // Log failed attempt for security monitoring
@@ -82,6 +79,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    // Create session token
+    const sessionToken = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     // Create session
     const sessionData = {
       userId: authResult.user.id,
@@ -93,13 +93,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userAgent: req.headers['user-agent'] || 'unknown'
     };
 
-    const sessionToken = authResult.sessionToken;
     const sessionOptions = {
       maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000 // 30 days or 1 day
     };
 
     const sessionCreated = await sessionService.createSession(
-      sessionToken!, 
+      sessionToken, 
       sessionData, 
       sessionOptions
     );
