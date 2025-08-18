@@ -10,11 +10,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   
-  // Experimental features for middleware support
-  experimental: {
-    nodeMiddleware: true,
-  },
-  
   // Performance optimizations
   compiler: {
     // Remove console logs in production
