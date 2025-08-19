@@ -168,39 +168,87 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     break;
                     
                   case 'spreads':
+                    // Group spread outcomes by point value
+                    const spreadsByPoint: { [point: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const spreadKey = `${bookmaker.title}_${outcome.name}_${outcome.point || 0}`;
-                      processedGame.marketsByType.spread[spreadKey] = {
-                        option1: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` },
-                        option2: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` }
-                      };
+                      const point = outcome.point?.toString() || '0';
+                      if (!spreadsByPoint[point]) {
+                        spreadsByPoint[point] = [];
+                      }
+                      spreadsByPoint[point].push(outcome);
+                    });
+                    
+                    // Create arbitrage-ready spread markets
+                    Object.entries(spreadsByPoint).forEach(([point, outcomes]) => {
+                      if (outcomes.length === 2) {
+                        const spreadKey = `${bookmaker.title}_${point}`;
+                        processedGame.marketsByType.spread[spreadKey] = {
+                          option1: { 
+                            odds: outcomes[0].price, 
+                            name: `${outcomes[0].name} ${formatSpreadPoint(parseFloat(point))}` 
+                          },
+                          option2: { 
+                            odds: outcomes[1].price, 
+                            name: `${outcomes[1].name} ${formatSpreadPoint(-parseFloat(point))}` 
+                          }
+                        };
+                      }
                     });
                     break;
                     
                   case 'totals':
+                    // Group total outcomes by point value
+                    const totalsByPoint: { [point: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const totalKey = `${bookmaker.title}_${outcome.point || 0}`;
-                      if (!processedGame.marketsByType.total[totalKey]) {
-                        processedGame.marketsByType.total[totalKey] = {};
+                      const point = outcome.point?.toString() || '0';
+                      if (!totalsByPoint[point]) {
+                        totalsByPoint[point] = [];
                       }
-                      processedGame.marketsByType.total[totalKey][outcome.name.toLowerCase()] = {
-                        odds: outcome.price,
-                        name: `${outcome.name} ${outcome.point}`
-                      };
+                      totalsByPoint[point].push(outcome);
+                    });
+                    
+                    // Create arbitrage-ready total markets
+                    Object.entries(totalsByPoint).forEach(([point, outcomes]) => {
+                      if (outcomes.length === 2) {
+                        const totalKey = `${bookmaker.title}_${point}`;
+                        const over = outcomes.find(o => o.name.toLowerCase().includes('over'));
+                        const under = outcomes.find(o => o.name.toLowerCase().includes('under'));
+                        
+                        if (over && under) {
+                          processedGame.marketsByType.total[totalKey] = {
+                            option1: { 
+                              odds: over.price, 
+                              name: `Over ${point}` 
+                            },
+                            option2: { 
+                              odds: under.price, 
+                              name: `Under ${point}` 
+                            }
+                          };
+                        }
+                      }
                     });
                     break;
 
                   case 'btts': // Both Teams To Score (soccer)
-                    market.outcomes?.forEach((outcome: any) => {
-                      if (!processedGame.marketsByType.btts[bookmaker.title]) {
-                        processedGame.marketsByType.btts[bookmaker.title] = {};
+                    // Create arbitrage-ready BTTS market
+                    if (market.outcomes && market.outcomes.length === 2) {
+                      const yes = market.outcomes.find((o: any) => o.name.toLowerCase().includes('yes'));
+                      const no = market.outcomes.find((o: any) => o.name.toLowerCase().includes('no'));
+                      
+                      if (yes && no) {
+                        processedGame.marketsByType.btts[bookmaker.title] = {
+                          option1: { 
+                            odds: yes.price, 
+                            name: 'Both Teams Score - Yes' 
+                          },
+                          option2: { 
+                            odds: no.price, 
+                            name: 'Both Teams Score - No' 
+                          }
+                        };
                       }
-                      const key = outcome.name.toLowerCase().includes('yes') ? 'option1' : 'option2';
-                      processedGame.marketsByType.btts[bookmaker.title][key] = {
-                        odds: outcome.price,
-                        name: outcome.name
-                      };
-                    });
+                    }
                     break;
 
                   case 'draw_no_bet': // Draw No Bet (soccer)
@@ -215,39 +263,105 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     break;
 
                   case 'team_totals': // Individual team totals
+                    // Group team total outcomes by team and point value
+                    const teamTotalsByTeamAndPoint: { [key: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const teamTotalKey = `${bookmaker.title}_${outcome.name}_${outcome.point || 0}`;
-                      if (!processedGame.marketsByType.team_totals[teamTotalKey]) {
-                        processedGame.marketsByType.team_totals[teamTotalKey] = {};
+                      // Extract team name from outcome
+                      const teamName = outcome.name || outcome.description || 'Unknown Team';
+                      const point = outcome.point?.toString() || '0';
+                      const key = `${teamName}_${point}`;
+                      
+                      if (!teamTotalsByTeamAndPoint[key]) {
+                        teamTotalsByTeamAndPoint[key] = [];
                       }
-                      const overUnder = outcome.name.toLowerCase().includes('over') ? 'over' : 'under';
-                      processedGame.marketsByType.team_totals[teamTotalKey][overUnder] = {
-                        odds: outcome.price,
-                        name: `${outcome.name} ${outcome.point}`
-                      };
+                      teamTotalsByTeamAndPoint[key].push(outcome);
+                    });
+                    
+                    // Create arbitrage-ready team total markets
+                    Object.entries(teamTotalsByTeamAndPoint).forEach(([key, outcomes]) => {
+                      if (outcomes.length === 2) {
+                        const teamTotalKey = `${bookmaker.title}_${key}`;
+                        const over = outcomes.find(o => o.name.toLowerCase().includes('over'));
+                        const under = outcomes.find(o => o.name.toLowerCase().includes('under'));
+                        
+                        if (over && under) {
+                          const teamName = key.split('_')[0];
+                          const point = key.split('_')[1];
+                          processedGame.marketsByType.team_totals[teamTotalKey] = {
+                            option1: { 
+                              odds: over.price, 
+                              name: `${teamName} Over ${point}` 
+                            },
+                            option2: { 
+                              odds: under.price, 
+                              name: `${teamName} Under ${point}` 
+                            }
+                          };
+                        }
+                      }
                     });
                     break;
 
                   case 'alternate_spreads': // Alternative spreads
+                    // Group alternate spread outcomes by point value
+                    const altSpreadsByPoint: { [point: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const altSpreadKey = `${bookmaker.title}_${outcome.name}_${outcome.point || 0}`;
-                      processedGame.marketsByType.alternate_spreads[altSpreadKey] = {
-                        option1: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` },
-                        option2: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` }
-                      };
+                      const point = outcome.point?.toString() || '0';
+                      if (!altSpreadsByPoint[point]) {
+                        altSpreadsByPoint[point] = [];
+                      }
+                      altSpreadsByPoint[point].push(outcome);
+                    });
+                    
+                    // Create arbitrage-ready alternate spread markets
+                    Object.entries(altSpreadsByPoint).forEach(([point, outcomes]) => {
+                      if (outcomes.length === 2) {
+                        const altSpreadKey = `${bookmaker.title}_alt_${point}`;
+                        processedGame.marketsByType.alternate_spreads[altSpreadKey] = {
+                          option1: { 
+                            odds: outcomes[0].price, 
+                            name: `${outcomes[0].name} ${formatSpreadPoint(parseFloat(point))}` 
+                          },
+                          option2: { 
+                            odds: outcomes[1].price, 
+                            name: `${outcomes[1].name} ${formatSpreadPoint(-parseFloat(point))}` 
+                          }
+                        };
+                      }
                     });
                     break;
 
                   case 'alternate_totals': // Alternative totals
+                    // Group alternate total outcomes by point value
+                    const altTotalsByPoint: { [point: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const altTotalKey = `${bookmaker.title}_${outcome.point || 0}`;
-                      if (!processedGame.marketsByType.alternate_totals[altTotalKey]) {
-                        processedGame.marketsByType.alternate_totals[altTotalKey] = {};
+                      const point = outcome.point?.toString() || '0';
+                      if (!altTotalsByPoint[point]) {
+                        altTotalsByPoint[point] = [];
                       }
-                      processedGame.marketsByType.alternate_totals[altTotalKey][outcome.name.toLowerCase()] = {
-                        odds: outcome.price,
-                        name: `${outcome.name} ${outcome.point}`
-                      };
+                      altTotalsByPoint[point].push(outcome);
+                    });
+                    
+                    // Create arbitrage-ready alternate total markets
+                    Object.entries(altTotalsByPoint).forEach(([point, outcomes]) => {
+                      if (outcomes.length === 2) {
+                        const altTotalKey = `${bookmaker.title}_alt_${point}`;
+                        const over = outcomes.find(o => o.name.toLowerCase().includes('over'));
+                        const under = outcomes.find(o => o.name.toLowerCase().includes('under'));
+                        
+                        if (over && under) {
+                          processedGame.marketsByType.alternate_totals[altTotalKey] = {
+                            option1: { 
+                              odds: over.price, 
+                              name: `Over ${point}` 
+                            },
+                            option2: { 
+                              odds: under.price, 
+                              name: `Under ${point}` 
+                            }
+                          };
+                        }
+                      }
                     });
                     break;
 

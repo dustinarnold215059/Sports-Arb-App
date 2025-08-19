@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       `&dateFormat=${OPTIMIZED_CONFIG.DATE_FORMAT}` +
       `&bookmakers=${OPTIMIZED_CONFIG.BOOKMAKERS}` +
       `&commenceTimeFrom=${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}` + // Only future games
-      `&commenceTimeTo=${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`; // Next 7 days
+      `&commenceTimeTo=${new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`; // Next year to catch all future games
 
     console.log('🚀 Optimized API call:', {
       sport,
@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
             `&dateFormat=${OPTIMIZED_CONFIG.DATE_FORMAT}` +
             `&bookmakers=draftkings,fanduel,betmgm` + // Reduce to most reliable bookmakers
             `&commenceTimeFrom=${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}` +
-            `&commenceTimeTo=${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`; // Expand to 2 weeks
+            `&commenceTimeTo=${new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`; // Next year to catch all future games
           
           try {
             const fallbackResponse = await fetch(fallbackUrl, {

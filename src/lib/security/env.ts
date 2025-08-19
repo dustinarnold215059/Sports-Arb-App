@@ -97,7 +97,7 @@ function validateEnv() {
       // CI build indicators  
       process.env.CI === 'true' ||
       // Next.js build command detection
-      (process.argv && process.argv.includes('build')) ||
+      (typeof process !== 'undefined' && process.argv && process.argv.includes('build')) ||
       // Generic build time detection - no runtime port means build time
       (process.env.NODE_ENV === 'production' && !process.env.PORT && !process.env.VERCEL_ENV)
     );
@@ -182,11 +182,16 @@ function validateEnv() {
     } else {
       console.warn('⚠️  Continuing with safe default environment values');
       // Return environment with safe defaults
-      return envSchema.parse({
-        ...process.env,
-        JWT_SECRET: 'build-time-jwt-secret-key-at-least-32-chars-long-safe-default',
-        JWT_REFRESH_SECRET: 'build-time-refresh-secret-key-at-least-32-chars-long-safe-default'
-      });
+      try {
+        return envSchema.parse({
+          ...process.env,
+          JWT_SECRET: 'build-time-jwt-secret-key-at-least-32-chars-long-safe-default',
+          JWT_REFRESH_SECRET: 'build-time-refresh-secret-key-at-least-32-chars-long-safe-default'
+        });
+      } catch (fallbackError) {
+        console.error('❌ Even fallback environment validation failed:', fallbackError);
+        throw fallbackError;
+      }
     }
   }
 }

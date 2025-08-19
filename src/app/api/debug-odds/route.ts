@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   url += `&oddsFormat=american` +
     `&dateFormat=iso` +
     `&commenceTimeFrom=${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}` +
-    `&commenceTimeTo=${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
+    `&commenceTimeTo=${new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
 
   console.log('🔍 Debug API call:', {
     sport,
