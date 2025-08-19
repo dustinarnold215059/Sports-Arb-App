@@ -1,15 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ModernCard, ModernCardHeader, ModernCardBody } from "../../shared/components/ui/ModernCard";
 import { ModernButton, NeonButton, GradientButton } from "../../shared/components/ui/ModernButton";
 import { ModernBadge, StatusBadge, MetricBadge } from "../../shared/components/ui/ModernBadge";
 import { useAuth } from "../../shared/auth/authProvider";
 
 export default function AuthPage() {
-  const { login, register, isLoading } = useAuth();
+  const { login, register, isLoading, isAuthenticated, user } = useAuth();
+  const router = useRouter();
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [error, setError] = useState<string>('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -17,14 +20,59 @@ export default function AuthPage() {
     username: ''
   });
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      // Redirect based on user role
+      const redirectTo = user.role === 'admin' ? '/admin' : '/dashboard';
+      router.push(redirectTo);
+    }
+  }, [isAuthenticated, user, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === 'login') {
-      await login(formData.email, formData.password);
-    } else {
-      await register(formData.email, formData.password, formData.username);
+    setError('');
+    
+    try {
+      if (mode === 'login') {
+        await login(formData.email, formData.password);
+        // The useEffect above will handle the redirect
+      } else {
+        await register({
+          email: formData.email,
+          password: formData.password,
+          username: formData.username
+        });
+      }
+    } catch (error: any) {
+      setError(error.message || 'Authentication failed');
     }
   };
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-white">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show success message if authenticated (before redirect)
+  if (isAuthenticated && user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-green-500 text-6xl mb-4">✓</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Welcome back, {user.username}!</h2>
+          <p className="text-gray-300">Redirecting to your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
@@ -135,6 +183,12 @@ export default function AuthPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                    <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-4">
+                      <p className="text-red-400 text-sm">{error}</p>
+                    </div>
+                  )}
+                  
                   {mode === 'register' && (
                     <div>
                       <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
