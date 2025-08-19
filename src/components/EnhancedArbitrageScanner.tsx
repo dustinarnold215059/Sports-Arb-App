@@ -554,7 +554,14 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       // Find arbitrage opportunities across selected bet types
       const found: ArbitrageOpportunity[] = [];
       
-      finalGames.forEach(game => {
+      console.log(`🔍 DEBUGGING: Processing ${finalGames.length} games for arbitrage...`);
+      
+      finalGames.forEach((game, gameIndex) => {
+        console.log(`🎮 Game ${gameIndex + 1}: ${game.game}`, {
+          totalMarkets: game.totalMarkets || 0,
+          bookmakers: game.bookmakers?.length || 0,
+          marketsByType: Object.keys(game.marketsByType || {})
+        });
         selectedBetTypes.forEach(betType => {
           // Skip draw risk bet types for sports that can have draws
           const drawRiskBetTypes = [
@@ -570,23 +577,30 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
           
           if (hasDrawRisk(game.sport_key || '') && isDrawRiskBet) {
             console.log(`🚫 Skipping ${betType} for ${game.sport_key} - draw risk sport`);
-            return; // Skip this bet type for this sport
+            // TEMPORARILY DISABLE draw risk filtering to see if this is causing the issue
+            // return; // Skip this bet type for this sport
           }
           
           const marketData = game.marketsByType[betType];
+          console.log(`🎯 Processing ${betType} for ${game.game}:`, {
+            hasMarketData: !!marketData,
+            bookmakerCount: marketData ? Object.keys(marketData).length : 0,
+            bookmakers: marketData ? Object.keys(marketData) : []
+          });
+          
           if (marketData && Object.keys(marketData).length >= 2) {
             
-            // Pre-filter totals markets to only include those with matching point values
+            // TEMPORARILY DISABLE totals filtering to see if this is causing the issue
             let filteredMarketData = marketData;
-            if (betType === 'total' || betType === 'alternate_totals') {
-              filteredMarketData = filterTotalsMarketsByPointValue(marketData);
+            // if (betType === 'total' || betType === 'alternate_totals') {
+            //   filteredMarketData = filterTotalsMarketsByPointValue(marketData);
               
-              // Skip if no valid matching point values found
-              if (Object.keys(filteredMarketData).length < 2) {
-                console.log(`⚠️ Skipping ${betType} for ${game.game} - no markets with matching point values for valid arbitrage`);
-                return;
-              }
-            }
+            //   // Skip if no valid matching point values found
+            //   if (Object.keys(filteredMarketData).length < 2) {
+            //     console.log(`⚠️ Skipping ${betType} for ${game.game} - no markets with matching point values for valid arbitrage`);
+            //     return;
+            //   }
+            // }
             
             let opportunity: ArbitrageOpportunity;
             
@@ -693,10 +707,24 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
               );
             }
             
+            console.log(`📊 Opportunity result for ${betType}:`, {
+              isArbitrage: opportunity.isArbitrage,
+              profitMargin: opportunity.profitMargin,
+              guaranteedProfit: opportunity.guaranteedProfit,
+              totalBets: opportunity.bets.length
+            });
+            
             if (opportunity.isArbitrage) {
               // Check if same sportsbook is on both sides
               const bookmakers = opportunity.bets.map(bet => bet.bookmaker);
               const uniqueBookmakers = new Set(bookmakers);
+              
+              console.log(`🔍 Bookmaker check:`, {
+                bookmakers,
+                uniqueCount: uniqueBookmakers.size,
+                betCount: opportunity.bets.length,
+                passesCheck: uniqueBookmakers.size === opportunity.bets.length
+              });
               
               // Only add if different sportsbooks are used
               if (uniqueBookmakers.size === opportunity.bets.length) {
@@ -720,6 +748,14 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       
       // Sort opportunities by profit margin (highest first)
       found.sort((a, b) => b.profitMargin - a.profitMargin);
+      
+      console.log(`🏁 FINAL RESULT: Found ${found.length} arbitrage opportunities:`, found.map(op => ({
+        game: op.game,
+        betType: op.betType,
+        profitMargin: op.profitMargin,
+        guaranteedProfit: op.guaranteedProfit,
+        bookmakers: op.bets.map(bet => bet.bookmaker)
+      })));
       
       setOpportunities(found);
       
