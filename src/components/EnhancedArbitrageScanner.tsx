@@ -97,6 +97,14 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       
       // ULTRA-OPTIMIZATION: Use new multi-sport fetcher for maximum efficiency
       const maxSports = Math.min(rateLimiter.getRemainingRequests(), 12); // Conservative for arbitrage
+      
+      console.log('📊 Scan parameters:', {
+        maxSports,
+        remainingRequests: rateLimiter.getRemainingRequests(),
+        canMakeRequest: rateLimiter.canMakeRequest(),
+        rateLimiterStatus: rateLimiter.getStatus()
+      });
+      
       const result = await fetchOptimizedMultiSportData(maxSports);
       
       const fetchTime = Date.now() - startTime;
@@ -384,13 +392,21 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
     } catch (err: any) {
       console.error('Error scanning for opportunities:', err);
       
+      // Enhanced error handling with detailed debugging
+      let errorMessage = `Failed to fetch live odds data: ${err.message}`;
+      
       // Check if it's a rate limit error
       if (err.message?.includes('OUT OF API REQUESTS') || err.message?.includes('quota') || err.message?.includes('limit')) {
-        setError(err.message);
+        errorMessage = err.message;
+      } else if (err.message?.includes('API key')) {
+        errorMessage = `🔑 API KEY ISSUE\n\nThe API key may be invalid or missing.\n\nDetails: ${err.message}\n\nActions:\n• Check environment variable NEXT_PUBLIC_ODDS_API_KEY\n• Verify API key at https://the-odds-api.com/\n• Restart development server`;
+      } else if (err.message?.includes('fetch')) {
+        errorMessage = `🌐 NETWORK ERROR\n\nFailed to connect to optimized API endpoint.\n\nDetails: ${err.message}\n\nActions:\n• Check internet connection\n• Verify API endpoint is running\n• Check browser console for CORS errors`;
       } else {
-        setError(`Failed to fetch live odds data: ${err.message}`);
+        errorMessage = `🔧 PROCESSING ERROR\n\nAn error occurred while processing odds data.\n\nDetails: ${err.message}\n\nActions:\n• Try scanning again\n• Check browser console for details\n• Report issue if it persists`;
       }
       
+      setError(errorMessage);
       setOpportunities([]);
     } finally {
       setLastScan(new Date());

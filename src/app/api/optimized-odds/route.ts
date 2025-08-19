@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // ULTRA-OPTIMIZED API route with maximum data extraction per call
 const OPTIMIZED_CONFIG = {
   BASE_URL: 'https://api.the-odds-api.com/v4',
-  API_KEY: process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '',
+  API_KEY: process.env.NEXT_PUBLIC_ODDS_API_KEY || process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb',
   REGIONS: 'us',
   MARKETS: 'h2h,spreads,totals,outrights,btts,draw_no_bet,team_totals,alternate_spreads,alternate_totals,player_props', // Enhanced bet types including player props for maximum arbitrage opportunities
   ODDS_FORMAT: 'american',

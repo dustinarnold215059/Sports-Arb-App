@@ -22,7 +22,7 @@ interface OptimizedAPIConfig {
 // OPTIMIZATION 1: Target only the most important bookmakers to reduce response size
 const OPTIMIZED_CONFIG: OptimizedAPIConfig = {
   BASE_URL: 'https://api.the-odds-api.com/v4',
-  API_KEY: process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '',
+  API_KEY: process.env.NEXT_PUBLIC_ODDS_API_KEY || process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb',
   REGIONS: 'us',
   MARKETS: 'h2h,spreads,totals,outrights,btts,draw_no_bet,team_totals,alternate_spreads,alternate_totals,player_props', // Enhanced bet types including player props for maximum arbitrage opportunities
   ODDS_FORMAT: 'american',
@@ -218,7 +218,14 @@ class OptimizedRateLimiter {
 
     const now = Date.now();
     this.requests = this.requests.filter(req => now - req.timestamp < this.timeWindow);
-    return Math.max(0, this.maxRequests - this.requests.length);
+    const remaining = Math.max(0, this.maxRequests - this.requests.length);
+    
+    // If we haven't made any requests yet, assume we have a reasonable number available
+    if (this.requests.length === 0 && this.actualRemaining === null) {
+      return Math.min(this.maxRequests, 50); // Conservative estimate for new sessions
+    }
+    
+    return remaining;
   }
 
   // Predict best sports to request based on historical success
