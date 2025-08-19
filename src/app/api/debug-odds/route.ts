@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const markets = searchParams.get('markets') || 'h2h';
   const bookmakers = searchParams.get('bookmakers') || 'draftkings,fanduel,betmgm';
   
-  const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb';
+  const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || 'b8fe6dead67058775bb5ae595cc57b94';
   
   if (!apiKey || apiKey === 'your-api-key-here') {
     return NextResponse.json({ 

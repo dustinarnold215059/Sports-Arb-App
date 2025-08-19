@@ -12,7 +12,7 @@ export function APITest() {
 
     try {
       // Test the raw API endpoint
-      const apiKey = '7f0bd24ef41d31ae6fd09082bc36d3bb'; // Fresh API key
+      const apiKey = 'b8fe6dead67058775bb5ae595cc57b94'; // Fresh API key
       console.log('API Key (first 10 chars):', apiKey?.substring(0, 10) + '...');
 
       // First, test available sports

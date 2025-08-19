@@ -11,7 +11,7 @@ export function APIKeyTest() {
     setTestResult('Testing API key...');
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb'; // Fresh API key
+      const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || 'b8fe6dead67058775bb5ae595cc57b94'; // Fresh API key
       
       // Detailed debugging
       setTestResult(`Debug Info:
@@ -72,7 +72,7 @@ export function APIKeyTest() {
       
       <div className="mb-4">
         <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-          Current API key: {(process.env.NEXT_PUBLIC_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb').substring(0, 8) + '...'}
+          Current API key: {(process.env.NEXT_PUBLIC_ODDS_API_KEY || 'b8fe6dead67058775bb5ae595cc57b94').substring(0, 8) + '...'}
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400">
           From environment variable: NEXT_PUBLIC_ODDS_API_KEY

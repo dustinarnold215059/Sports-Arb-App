@@ -17,7 +17,7 @@ export function LiveOddsIntegration() {
 
   // Check if API key is configured
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb'; // Fresh API key
+    const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY || 'b8fe6dead67058775bb5ae595cc57b94'; // Fresh API key
     if (!apiKey || apiKey.includes('your-api-key-here')) {
       setApiKeyStatus('missing');
     } else {
