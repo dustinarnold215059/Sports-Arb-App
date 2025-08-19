@@ -74,11 +74,27 @@ class AuthAPI {
 
   async login(email: string, password: string): Promise<{ user: User; token: string }> {
     try {
+      // First, get CSRF token
+      const csrfResponse = await fetch('/api/auth/csrf', {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!csrfResponse.ok) {
+        throw new ValidationError('Failed to get CSRF token');
+      }
+
+      const csrfData = await csrfResponse.json();
+      const csrfToken = csrfData.csrfToken;
+
+      // Then make login request with CSRF token
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken
         },
+        credentials: 'include',
         body: JSON.stringify({
           identifier: email,
           password: password,
