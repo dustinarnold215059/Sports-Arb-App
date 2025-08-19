@@ -44,7 +44,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
   const [scannedSports, setScannedSports] = useState(0);
   const [totalSports, setTotalSports] = useState(0);
   const [activeSports, setActiveSports] = useState<string[]>([]);
-  const [selectedBetTypes] = useState<string[]>(['moneyline', 'spread', 'total', 'outright', 'btts', 'draw_no_bet', 'team_totals', 'alternate_spreads', 'alternate_totals', 'player_props']);
+  const [selectedBetTypes] = useState<string[]>(['moneyline', 'spread', 'total', 'outright', 'btts', 'draw_no_bet', 'team_totals', 'alternate_spreads', 'alternate_totals', 'player_props']); // All bet types for maximum opportunities
   const [allGameData, setAllGameData] = useState<any[]>([]);
   const [showBetTracker, setShowBetTracker] = useState<{ show: boolean; opportunity?: ArbitrageOpportunity }>({ show: false });
 
@@ -431,7 +431,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
               🚀 Arbitrage Scanner
             </h2>
             <p className="text-gray-300 text-sm">
-              Enhanced scanning across {betTypeOptions.length} bet types & {Object.keys(SUPPORTED_SPORTS).length}+ sports
+              Enhanced scanning across {selectedBetTypes.length} bet types & {Object.keys(SUPPORTED_SPORTS).length}+ sports
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -516,7 +516,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       {isScanning ? (
         <div className="text-center py-12">
           <div className="w-8 h-8 border-4 border-blue-200 dark:border-gray-600 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-300">Enhanced scanning with all 10 bet types...</p>
+          <p className="text-gray-600 dark:text-gray-300">Enhanced scanning with all {selectedBetTypes.length} bet types...</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
             Progress: {scannedSports}/{totalSports} sports • All bet types active
           </p>

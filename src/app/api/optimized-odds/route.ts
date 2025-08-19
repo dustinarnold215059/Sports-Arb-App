@@ -5,11 +5,28 @@ const OPTIMIZED_CONFIG = {
   BASE_URL: 'https://api.the-odds-api.com/v4',
   API_KEY: process.env.NEXT_PUBLIC_ODDS_API_KEY || process.env.NEXT_PUBLIC_THE_ODDS_API_KEY || '7f0bd24ef41d31ae6fd09082bc36d3bb',
   REGIONS: 'us',
-  MARKETS: 'h2h,spreads,totals,outrights,btts,draw_no_bet,team_totals,alternate_spreads,alternate_totals,player_props', // Enhanced bet types including player props for maximum arbitrage opportunities
+  MARKETS_FULL: 'h2h,spreads,totals,outrights,btts,draw_no_bet,team_totals,alternate_spreads,alternate_totals,player_props', // All bet types for maximum arbitrage opportunities
+  MARKETS_FALLBACK: 'h2h,spreads,totals', // Fallback markets that work for all sports
   ODDS_FORMAT: 'american',
   DATE_FORMAT: 'iso',
   // CRITICAL OPTIMIZATION: Only request major bookmakers to reduce payload size
-  BOOKMAKERS: 'draftkings,fanduel,betmgm,caesars,pointsbet,betrivers,wynnbet,barstool'
+  BOOKMAKERS: 'draftkings,fanduel,betmgm,caesars,pointsbet,betrivers' // Reliable major bookmakers
+};
+
+// Sport-specific market configurations
+const SPORT_MARKET_CONFIG: Record<string, string> = {
+  'americanfootball_nfl': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
+  'americanfootball_ncaaf': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals',
+  'basketball_nba': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
+  'basketball_ncaab': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals',
+  'baseball_mlb': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
+  'icehockey_nhl': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
+  'soccer_epl': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
+  'soccer_spain_la_liga': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
+  'soccer_usa_mls': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
+  'mma_mixed_martial_arts': 'h2h,outrights',
+  'tennis_wta': 'h2h,spreads,totals',
+  'tennis_atp': 'h2h,spreads,totals'
 };
 
 export async function GET(request: NextRequest) {
@@ -28,12 +45,13 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // OPTIMIZATION 1: Single call with maximum data extraction
-    // Include bookmakers filter to reduce response size and focus on valuable data
+    // OPTIMIZATION 1: Use sport-specific markets for better compatibility
+    const markets = SPORT_MARKET_CONFIG[sport] || OPTIMIZED_CONFIG.MARKETS_FALLBACK;
+    
     const url = `${OPTIMIZED_CONFIG.BASE_URL}/sports/${sport}/odds/` +
       `?apiKey=${apiKey}` +
       `&regions=${OPTIMIZED_CONFIG.REGIONS}` +
-      `&markets=${OPTIMIZED_CONFIG.MARKETS}` +
+      `&markets=${markets}` +
       `&oddsFormat=${OPTIMIZED_CONFIG.ODDS_FORMAT}` +
       `&dateFormat=${OPTIMIZED_CONFIG.DATE_FORMAT}` +
       `&bookmakers=${OPTIMIZED_CONFIG.BOOKMAKERS}` +
@@ -42,7 +60,8 @@ export async function GET(request: NextRequest) {
 
     console.log('🚀 Optimized API call:', {
       sport,
-      markets: OPTIMIZED_CONFIG.MARKETS.split(',').length,
+      markets: markets.split(','),
+      marketCount: markets.split(',').length,
       bookmakers: OPTIMIZED_CONFIG.BOOKMAKERS.split(',').length,
       timeRange: '7 days'
     });
@@ -65,6 +84,20 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      let errorData;
+      
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
+      
+      console.error('❌ External API Error:', {
+        status: response.status,
+        sport,
+        url: url.replace(apiKey, 'HIDDEN'),
+        error: errorData
+      });
       
       // Enhanced error handling with optimization context
       let errorMessage = `Optimized API error: ${response.status}`;
@@ -73,6 +106,55 @@ export async function GET(request: NextRequest) {
         errorMessage = '🔑 UNAUTHORIZED - API key lacks permissions for odds data';
       } else if (response.status === 404) {
         errorMessage = `Sport not found: ${sport}`;
+      } else if (response.status === 422) {
+        // Try fallback with basic markets
+        if (markets !== OPTIMIZED_CONFIG.MARKETS_FALLBACK) {
+          console.log(`⚠️ 422 error with sport-specific markets, trying fallback for ${sport}`);
+          
+          const fallbackUrl = `${OPTIMIZED_CONFIG.BASE_URL}/sports/${sport}/odds/` +
+            `?apiKey=${apiKey}` +
+            `&regions=${OPTIMIZED_CONFIG.REGIONS}` +
+            `&markets=${OPTIMIZED_CONFIG.MARKETS_FALLBACK}` +
+            `&oddsFormat=${OPTIMIZED_CONFIG.ODDS_FORMAT}` +
+            `&dateFormat=${OPTIMIZED_CONFIG.DATE_FORMAT}` +
+            `&bookmakers=${OPTIMIZED_CONFIG.BOOKMAKERS}` +
+            `&commenceTimeFrom=${new Date().toISOString()}` +
+            `&commenceTimeTo=${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()}`;
+          
+          const fallbackResponse = await fetch(fallbackUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'SportsArb-Optimized/2.0',
+              'Accept-Encoding': 'gzip, deflate, br'
+            },
+            signal: AbortSignal.timeout(15000)
+          });
+          
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            const processedData = processOptimizedOddsData(fallbackData, sport);
+            
+            console.log(`✅ Fallback successful for ${sport}:`, {
+              games: processedData.games.length,
+              markets: 'basic (h2h,spreads,totals)'
+            });
+            
+            return NextResponse.json({
+              ...processedData,
+              sport,
+              generated_at: new Date().toISOString(),
+              apiUsage: {
+                remainingRequests: fallbackResponse.headers.get('X-Requests-Remaining'),
+                requestsUsed: fallbackResponse.headers.get('X-Requests-Used'),
+                responseTime: Date.now() - startTime,
+                optimization: 'fallback-basic-markets'
+              }
+            });
+          }
+        }
+        
+        errorMessage = `🚫 INVALID REQUEST PARAMETERS\n\nThe API request parameters are invalid for sport: ${sport}\n\nPossible Issues:\n• Unsupported markets for this sport\n• Invalid bookmaker combinations\n• Sport may be out of season\n\nAPI Response: ${errorData?.message || errorText}`;
       } else if (response.status === 429) {
         const remainingRequests = response.headers.get('X-Requests-Remaining');
         errorMessage = `🚫 OUT OF API REQUESTS\n\nAPI quota exceeded.\n\nStatus:\n• Remaining: ${remainingRequests || '0'}\n• This was an optimized call requesting multiple markets\n\nActions:\n• Wait for quota reset\n• Upgrade plan at https://the-odds-api.com/`;
