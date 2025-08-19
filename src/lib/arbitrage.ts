@@ -41,15 +41,22 @@ export interface ArbitrageOpportunity {
   profitMargin: number;
   isArbitrage: boolean;
   totalBookmakers: number;
-  betType?: string; // 'moneyline', 'spread', 'total', 'outright'
+  betType?: string; // 'moneyline', 'spread', 'total', 'outright', 'player_props'
   hasDrawRisk?: boolean;
   riskWarning?: string | null;
+  // Player props specific fields
+  playerName?: string;
+  propType?: string;
+  propValue?: number;
   bets: {
     bookmaker: string;
     team: string;
     odds: number;
     stake: number;
     potentialPayout: number;
+    // Player props specific fields
+    betType?: 'over' | 'under' | 'yes' | 'no';
+    description?: string;
   }[];
 }
 
@@ -304,4 +311,203 @@ export function calculateImpliedProbability(americanOdds: number): number {
   } else {
     return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
   }
+}
+
+// Player Props specific data structure
+export interface PlayerPropMarketData {
+  [propKey: string]: {
+    player: string;
+    prop: string;
+    markets: {
+      [bookmaker: string]: {
+        over?: { odds: number; name: string; point?: number };
+        under?: { odds: number; name: string; point?: number };
+        yes?: { odds: number; name: string };
+        no?: { odds: number; name: string };
+      };
+    };
+  };
+}
+
+// Find arbitrage opportunities in player props markets
+export function findBestPlayerPropArbitrage(
+  playerPropsData: PlayerPropMarketData,
+  gameName: string,
+  totalStake: number = 1000
+): ArbitrageOpportunity {
+  let bestOpportunity: ArbitrageOpportunity | null = null;
+  let bestProfitMargin = 0;
+
+  // Iterate through each player prop
+  Object.entries(playerPropsData).forEach(([propKey, propData]) => {
+    const { player, prop, markets } = propData;
+    
+    // Get all bookmakers for this prop
+    const bookmakers = Object.keys(markets);
+    
+    if (bookmakers.length < 2) return; // Need at least 2 bookmakers
+    
+    // Check for Over/Under arbitrage
+    let bestOverOdds = -Infinity;
+    let bestOverBookmaker = '';
+    let bestUnderOdds = -Infinity;
+    let bestUnderBookmaker = '';
+    let propValue = 0;
+    
+    // Find best Over and Under odds
+    bookmakers.forEach(bookmaker => {
+      const market = markets[bookmaker];
+      
+      if (market.over && market.over.odds > bestOverOdds) {
+        bestOverOdds = market.over.odds;
+        bestOverBookmaker = bookmaker;
+        propValue = market.over.point || 0;
+      }
+      
+      if (market.under && market.under.odds > bestUnderOdds) {
+        bestUnderOdds = market.under.odds;
+        bestUnderBookmaker = bookmaker;
+      }
+    });
+    
+    // Check if we have both Over and Under from different bookmakers
+    if (bestOverBookmaker && bestUnderBookmaker && bestOverBookmaker !== bestUnderBookmaker) {
+      const overProb = americanToImpliedProbability(bestOverOdds);
+      const underProb = americanToImpliedProbability(bestUnderOdds);
+      const totalImpliedProb = overProb + underProb;
+      
+      // Check for arbitrage opportunity
+      if (totalImpliedProb < 1) {
+        const profitMargin = (1 - totalImpliedProb) * 100;
+        
+        if (profitMargin > bestProfitMargin) {
+          // Calculate optimal stakes
+          const stakes = calculateOptimalStakes(bestOverOdds, bestUnderOdds, totalStake);
+          
+          // Calculate payouts
+          const overPayout = stakes.stake1 * americanToDecimal(bestOverOdds);
+          const underPayout = stakes.stake2 * americanToDecimal(bestUnderOdds);
+          const guaranteedProfit = Math.min(overPayout, underPayout) - totalStake;
+          
+          bestProfitMargin = profitMargin;
+          bestOpportunity = {
+            game: `${gameName} - ${player}`,
+            playerName: player,
+            propType: prop,
+            propValue: propValue,
+            totalStake,
+            guaranteedProfit,
+            profitMargin,
+            isArbitrage: true,
+            totalBookmakers: 2,
+            betType: 'player_props',
+            bets: [
+              {
+                bookmaker: bestOverBookmaker,
+                team: `${player} Over ${propValue}`,
+                odds: bestOverOdds,
+                stake: stakes.stake1,
+                potentialPayout: overPayout,
+                betType: 'over',
+                description: `${prop} Over ${propValue}`
+              },
+              {
+                bookmaker: bestUnderBookmaker,
+                team: `${player} Under ${propValue}`,
+                odds: bestUnderOdds,
+                stake: stakes.stake2,
+                potentialPayout: underPayout,
+                betType: 'under',
+                description: `${prop} Under ${propValue}`
+              }
+            ]
+          };
+        }
+      }
+    }
+    
+    // Also check for Yes/No arbitrage (for props like "Will player score a goal?")
+    let bestYesOdds = -Infinity;
+    let bestYesBookmaker = '';
+    let bestNoOdds = -Infinity;
+    let bestNoBookmaker = '';
+    
+    bookmakers.forEach(bookmaker => {
+      const market = markets[bookmaker];
+      
+      if (market.yes && market.yes.odds > bestYesOdds) {
+        bestYesOdds = market.yes.odds;
+        bestYesBookmaker = bookmaker;
+      }
+      
+      if (market.no && market.no.odds > bestNoOdds) {
+        bestNoOdds = market.no.odds;
+        bestNoBookmaker = bookmaker;
+      }
+    });
+    
+    // Check Yes/No arbitrage
+    if (bestYesBookmaker && bestNoBookmaker && bestYesBookmaker !== bestNoBookmaker) {
+      const yesProb = americanToImpliedProbability(bestYesOdds);
+      const noProb = americanToImpliedProbability(bestNoOdds);
+      const totalImpliedProb = yesProb + noProb;
+      
+      if (totalImpliedProb < 1) {
+        const profitMargin = (1 - totalImpliedProb) * 100;
+        
+        if (profitMargin > bestProfitMargin) {
+          const stakes = calculateOptimalStakes(bestYesOdds, bestNoOdds, totalStake);
+          
+          const yesPayout = stakes.stake1 * americanToDecimal(bestYesOdds);
+          const noPayout = stakes.stake2 * americanToDecimal(bestNoOdds);
+          const guaranteedProfit = Math.min(yesPayout, noPayout) - totalStake;
+          
+          bestProfitMargin = profitMargin;
+          bestOpportunity = {
+            game: `${gameName} - ${player}`,
+            playerName: player,
+            propType: prop,
+            totalStake,
+            guaranteedProfit,
+            profitMargin,
+            isArbitrage: true,
+            totalBookmakers: 2,
+            betType: 'player_props',
+            bets: [
+              {
+                bookmaker: bestYesBookmaker,
+                team: `${player} - Yes`,
+                odds: bestYesOdds,
+                stake: stakes.stake1,
+                potentialPayout: yesPayout,
+                betType: 'yes',
+                description: `${prop} - Yes`
+              },
+              {
+                bookmaker: bestNoBookmaker,
+                team: `${player} - No`,
+                odds: bestNoOdds,
+                stake: stakes.stake2,
+                potentialPayout: noPayout,
+                betType: 'no',
+                description: `${prop} - No`
+              }
+            ]
+          };
+        }
+      }
+    }
+  });
+
+  // Return best opportunity found or a no-arbitrage result
+  return bestOpportunity || {
+    game: gameName,
+    totalStake,
+    guaranteedProfit: 0,
+    profitMargin: 0,
+    isArbitrage: false,
+    totalBookmakers: 0,
+    betType: 'player_props',
+    bets: []
+  };
 }

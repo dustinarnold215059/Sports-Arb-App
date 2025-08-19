@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { 
   findBestArbitrageOpportunity, 
+  findBestPlayerPropArbitrage,
   formatAmericanOdds, 
   ArbitrageOpportunity, 
-  getBookmakerColor
+  getBookmakerColor,
+  PlayerPropMarketData
 } from '@/lib/arbitrage';
 import { decimalToAmerican, formatAmericanOdds as utilFormatAmericanOdds } from '@/lib/utils';
 import { BetTracker } from '@/components/BetTracker';
@@ -599,11 +601,87 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
               );
             } else if (betType === 'player_props') {
               // Special handling for player props with enhanced structure
-              opportunity = findBestPlayerPropArbitrage(
-                filteredMarketData,
-                `${game.game} (${game.sportName}) - PLAYER PROPS`,
-                totalStake
-              );
+              // Convert player props data to the expected format
+              const playerPropsFormatted: PlayerPropMarketData = {};
+              
+              // Check if game has enhanced player props data from event-specific API
+              if (game.playerProps && Object.keys(game.playerProps).length > 0) {
+                // Use detailed player props from event-specific API
+                Object.entries(game.playerProps).forEach(([marketName, propData]: [string, any]) => {
+                  if (propData.bookmakers && Object.keys(propData.bookmakers).length >= 2) {
+                    // Extract player and prop info from the market description
+                    const playerPropKey = `${marketName}_${Date.now()}`; // Unique key
+                    
+                    playerPropsFormatted[playerPropKey] = {
+                      player: propData.description?.split(' ')[0] || 'Unknown Player',
+                      prop: propData.description || marketName,
+                      markets: {}
+                    };
+                    
+                    // Process each bookmaker's odds for this prop
+                    Object.entries(propData.bookmakers).forEach(([bookmakerKey, bookmakerData]: [string, any]) => {
+                      const bookmakerTitle = bookmakerData.bookmaker || bookmakerKey;
+                      playerPropsFormatted[playerPropKey].markets[bookmakerTitle] = {};
+                      
+                      // Process outcomes (over/under, yes/no)
+                      bookmakerData.outcomes?.forEach((outcome: any) => {
+                        const outcomeName = outcome.name?.toLowerCase() || '';
+                        if (outcomeName.includes('over')) {
+                          playerPropsFormatted[playerPropKey].markets[bookmakerTitle].over = {
+                            odds: outcome.price,
+                            name: outcome.name,
+                            point: outcome.point
+                          };
+                        } else if (outcomeName.includes('under')) {
+                          playerPropsFormatted[playerPropKey].markets[bookmakerTitle].under = {
+                            odds: outcome.price,
+                            name: outcome.name,
+                            point: outcome.point
+                          };
+                        } else if (outcomeName.includes('yes')) {
+                          playerPropsFormatted[playerPropKey].markets[bookmakerTitle].yes = {
+                            odds: outcome.price,
+                            name: outcome.name
+                          };
+                        } else if (outcomeName.includes('no')) {
+                          playerPropsFormatted[playerPropKey].markets[bookmakerTitle].no = {
+                            odds: outcome.price,
+                            name: outcome.name
+                          };
+                        }
+                      });
+                    });
+                  }
+                });
+              } else {
+                // Fall back to basic player props from bulk API
+                Object.entries(filteredMarketData).forEach(([propKey, propData]: [string, any]) => {
+                  if (propData.player && propData.prop && propData.markets) {
+                    playerPropsFormatted[propKey] = propData;
+                  }
+                });
+              }
+              
+              // Only try to find arbitrage if we have formatted player props data
+              if (Object.keys(playerPropsFormatted).length > 0) {
+                opportunity = findBestPlayerPropArbitrage(
+                  playerPropsFormatted,
+                  `${game.game} (${game.sportName}) - PLAYER PROPS`,
+                  totalStake
+                );
+              } else {
+                // No player props data available
+                opportunity = {
+                  game: `${game.game} (${game.sportName}) - PLAYER PROPS`,
+                  totalStake,
+                  guaranteedProfit: 0,
+                  profitMargin: 0,
+                  isArbitrage: false,
+                  totalBookmakers: 0,
+                  betType: 'player_props',
+                  bets: []
+                };
+              }
             } else {
               // Create custom opportunity object for other bet types
               opportunity = findBestArbitrageOpportunityForBetType(
