@@ -1,10 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { handleSimpleCSRFTokenRequest } from '@/lib/middleware/simpleCSRF';
+import { handleVercelCSRFTokenRequest } from '@/lib/middleware/vercelCSRF';
 
 /**
  * CSRF Token API Endpoint
  * GET /api/auth/csrf
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  await handleSimpleCSRFTokenRequest(req, res);
+  await handleVercelCSRFTokenRequest(req, res);
 }

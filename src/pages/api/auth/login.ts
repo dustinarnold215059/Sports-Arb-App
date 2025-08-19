@@ -4,7 +4,7 @@ import { sessionService } from '@/lib/cache/sessionService';
 import { rateLimiter } from '@/lib/middleware/rateLimiter';
 import { validateRequestBody } from '@/lib/middleware/validation';
 import { logRequest, logSecurityEvent } from '@/lib/middleware/logging';
-import { simpleCSRFProtection } from '@/lib/middleware/simpleCSRF';
+import { vercelCSRFProtection } from '@/lib/middleware/vercelCSRF';
 import { z } from 'zod';
 
 const LoginSchema = z.object({
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   await logRequest(req, res);
   
   // Apply CSRF protection
-  const csrf = simpleCSRFProtection();
+  const csrf = vercelCSRFProtection();
   await new Promise<void>((resolve, reject) => {
     csrf(req, res, (error?: any) => {
       if (error) reject(error);
