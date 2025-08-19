@@ -195,6 +195,16 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
         cacheHitRatio: `${(result.cacheStats.cacheHitRatio * 100).toFixed(1)}%`,
         fetchTime: `${fetchTime}ms`
       });
+      
+      // CRITICAL DEBUG: Check raw API data
+      if (result.allGames.length === 0) {
+        console.error(`❌ API RETURNED NO GAMES! Check your API key and sports availability.`);
+        console.error(`Sports processed: ${result.sportsProcessed.join(', ')}`);
+        return;
+      }
+      
+      // Sample the first game to see raw structure
+      console.log(`🔍 Sample raw game data:`, result.allGames[0]);
 
       // Process the optimized game data for arbitrage scanning
       result.allGames.forEach(game => {
@@ -556,17 +566,27 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       
       console.log(`🔍 Processing ${finalGames.length} games for arbitrage...`);
       
+      // CRITICAL DEBUG: Check if we have ANY games at all
+      if (finalGames.length === 0) {
+        console.error(`❌ NO GAMES TO PROCESS! This is why no arbitrage is found.`);
+        return;
+      }
+      
       finalGames.forEach((game, gameIndex) => {
-        // Only log games that might have opportunities
-        if (game.bookmakers?.length >= 2) {
-          console.log(`🎮 Game ${gameIndex + 1}: ${game.game}`, {
-            sport: game.sport_key,
-            totalMarkets: game.totalMarkets || 0,
-            bookmakers: game.bookmakers?.length || 0,
-            availableMarkets: Object.keys(game.marketsByType || {}).filter(key => 
-              Object.keys(game.marketsByType[key] || {}).length >= 2
-            )
-          });
+        console.log(`🎮 Game ${gameIndex + 1}: ${game.game}`, {
+          sport: game.sport_key,
+          bookmakers: game.bookmakers?.length || 0,
+          hasMarketsByType: !!game.marketsByType,
+          marketKeys: Object.keys(game.marketsByType || {}),
+          // Show sample market data
+          moneylineBookmakers: Object.keys(game.marketsByType?.moneyline || {}),
+          spreadBookmakers: Object.keys(game.marketsByType?.spread || {}),
+          totalBookmakers: Object.keys(game.marketsByType?.total || {})
+        });
+        
+        // If no markets processed, this is the problem
+        if (!game.marketsByType || Object.keys(game.marketsByType).length === 0) {
+          console.error(`❌ Game ${game.game} has NO PROCESSED MARKETS!`);
         }
         selectedBetTypes.forEach(betType => {
           // Skip draw risk bet types for sports that can have draws
