@@ -363,7 +363,8 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                 marketData,
                 betType,
                 `${game.game} (${game.sportName}) - ${betType.toUpperCase()}`,
-                totalStake
+                totalStake,
+                game.sport_key || ''
               );
             }
             
@@ -714,12 +715,47 @@ function formatSpreadPoint(point: number): string {
   return point > 0 ? `+${point}` : `${point}`;
 }
 
+// Check if sport has draw risk (3-way markets)
+function hasDrawRisk(sportKey: string): boolean {
+  const drawRiskSports = [
+    'soccer_epl', 'soccer_spain_la_liga', 'soccer_usa_mls', 'soccer_germany_bundesliga',
+    'soccer_italy_serie_a', 'soccer_france_ligue_one', 'soccer_uefa_champs_league',
+    'soccer_fifa_world_cup', 'soccer_uefa_european_championship'
+  ];
+  return drawRiskSports.some(sport => sportKey.includes('soccer'));
+}
+
+// Check if spread arbitrage is valid (opposing spreads)
+function isValidSpreadArbitrage(option1Name: string, option2Name: string, betType: string): boolean {
+  if (betType !== 'spread' && betType !== 'alternate_spreads') {
+    return true; // Not a spread bet, no validation needed
+  }
+  
+  // Extract spread values from option names
+  const spread1Match = option1Name.match(/([+-]?\d+\.?\d*)/);
+  const spread2Match = option2Name.match(/([+-]?\d+\.?\d*)/);
+  
+  if (!spread1Match || !spread2Match) {
+    return false; // Can't determine spread values
+  }
+  
+  const spread1 = parseFloat(spread1Match[1]);
+  const spread2 = parseFloat(spread2Match[1]);
+  
+  // Valid spread arbitrage requires opposing spreads (one positive, one negative, equal magnitude)
+  const areOpposing = Math.abs(spread1 + spread2) < 0.1; // Allow small floating point differences
+  const differentSigns = (spread1 > 0 && spread2 < 0) || (spread1 < 0 && spread2 > 0);
+  
+  return areOpposing && differentSigns;
+}
+
 // Enhanced arbitrage calculation for different bet types
 function findBestArbitrageOpportunityForBetType(
   marketData: any,
   betType: string,
   gameName: string,
-  totalStake: number
+  totalStake: number,
+  sportKey: string = ''
 ): ArbitrageOpportunity {
   const bookmakers = Object.keys(marketData);
   if (bookmakers.length < 2) {
@@ -790,6 +826,40 @@ function findBestArbitrageOpportunityForBetType(
   const impliedProb2 = 1 / decimal2;
   const totalImpliedProb = impliedProb1 + impliedProb2;
   
+  // Validate arbitrage conditions before calculating
+  
+  // 1. Check for draw risk sports - only allow 2-outcome markets for true arbitrage
+  if (hasDrawRisk(sportKey) && (betType === 'moneyline' || betType === 'h2h')) {
+    return {
+      isArbitrage: false,
+      profitMargin: 0,
+      guaranteedProfit: 0,
+      totalStake,
+      bets: [],
+      game: gameName,
+      team1: bestOption1.name,
+      team2: bestOption2.name,
+      totalBookmakers: bookmakers.length,
+      riskWarning: 'Draw risk: This sport allows draws which invalidates 2-outcome arbitrage'
+    };
+  }
+  
+  // 2. Validate spread arbitrage (must have opposing spreads)
+  if (!isValidSpreadArbitrage(bestOption1.name, bestOption2.name, betType)) {
+    return {
+      isArbitrage: false,
+      profitMargin: 0,
+      guaranteedProfit: 0,
+      totalStake,
+      bets: [],
+      game: gameName,
+      team1: bestOption1.name,
+      team2: bestOption2.name,
+      totalBookmakers: bookmakers.length,
+      riskWarning: 'Invalid spread: Both spreads must be opposing (e.g., +6.5 vs -6.5)'
+    };
+  }
+
   // Check if arbitrage exists
   const isArbitrage = totalImpliedProb < 1;
   const profitMargin = isArbitrage ? ((1 - totalImpliedProb) / totalImpliedProb) * 100 : 0;
