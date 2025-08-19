@@ -492,12 +492,24 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
           const marketData = game.marketsByType[betType];
           if (marketData && Object.keys(marketData).length >= 2) {
             
+            // Pre-filter totals markets to only include those with matching point values
+            let filteredMarketData = marketData;
+            if (betType === 'total' || betType === 'alternate_totals') {
+              filteredMarketData = filterTotalsMarketsByPointValue(marketData);
+              
+              // Skip if no valid matching point values found
+              if (Object.keys(filteredMarketData).length < 2) {
+                console.log(`⚠️ Skipping ${betType} for ${game.game} - no markets with matching point values for valid arbitrage`);
+                return;
+              }
+            }
+            
             let opportunity: ArbitrageOpportunity;
             
             if (betType === 'moneyline') {
               // Use existing arbitrage calculator for moneyline
               opportunity = findBestArbitrageOpportunity(
-                marketData,
+                filteredMarketData,
                 game.team1,
                 game.team2,
                 `${game.game} (${game.sportName})${game.hasDrawRisk ? ' ⚠️' : ''}`,
@@ -506,14 +518,14 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
             } else if (betType === 'player_props') {
               // Special handling for player props with enhanced structure
               opportunity = findBestPlayerPropArbitrage(
-                marketData,
+                filteredMarketData,
                 `${game.game} (${game.sportName}) - PLAYER PROPS`,
                 totalStake
               );
             } else {
               // Create custom opportunity object for other bet types
               opportunity = findBestArbitrageOpportunityForBetType(
-                marketData,
+                filteredMarketData,
                 betType,
                 `${game.game} (${game.sportName}) - ${betType.toUpperCase()}`,
                 totalStake,
@@ -996,6 +1008,60 @@ function isValidTotalsArbitrage(option1Name: string, option2Name: string, betTyp
   }
   
   return isValid;
+}
+
+// Filter totals markets to only include those with matching point values for valid arbitrage
+function filterTotalsMarketsByPointValue(marketData: any): any {
+  const filtered: any = {};
+  const pointValueGroups: { [point: string]: string[] } = {};
+  
+  // Group markets by their point values
+  Object.keys(marketData).forEach(marketKey => {
+    const market = marketData[marketKey];
+    if (market && market.option1 && market.option2) {
+      // Extract point value from either option (they should be the same for valid totals)
+      const option1Match = market.option1.name.match(/(\d+\.?\d*)/);
+      const option2Match = market.option2.name.match(/(\d+\.?\d*)/);
+      
+      if (option1Match && option2Match) {
+        const point1 = parseFloat(option1Match[1]);
+        const point2 = parseFloat(option2Match[1]);
+        
+        // Only include if both options have the same point value (valid Over/Under pair)
+        if (Math.abs(point1 - point2) < 0.01) {
+          const pointValue = point1.toString();
+          if (!pointValueGroups[pointValue]) {
+            pointValueGroups[pointValue] = [];
+          }
+          pointValueGroups[pointValue].push(marketKey);
+        }
+      }
+    }
+  });
+  
+  // Find the point value with the most bookmakers (most liquid for arbitrage)
+  let bestPointValue = '';
+  let maxBookmakers = 0;
+  
+  Object.entries(pointValueGroups).forEach(([pointValue, marketKeys]) => {
+    if (marketKeys.length > maxBookmakers) {
+      maxBookmakers = marketKeys.length;
+      bestPointValue = pointValue;
+    }
+  });
+  
+  // Return only markets with the most common point value
+  if (bestPointValue && pointValueGroups[bestPointValue].length >= 2) {
+    pointValueGroups[bestPointValue].forEach(marketKey => {
+      filtered[marketKey] = marketData[marketKey];
+    });
+    
+    console.log(`✅ Filtered totals markets: Using point value ${bestPointValue} with ${maxBookmakers} bookmakers`);
+  } else {
+    console.log(`❌ No valid totals arbitrage: Insufficient markets with matching point values`);
+  }
+  
+  return filtered;
 }
 
 // Enhanced validation for spread markets from different bookmakers
