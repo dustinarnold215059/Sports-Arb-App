@@ -171,8 +171,8 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     market.outcomes?.forEach((outcome: any) => {
                       const spreadKey = `${bookmaker.title}_${outcome.name}_${outcome.point || 0}`;
                       processedGame.marketsByType.spread[spreadKey] = {
-                        option1: { odds: outcome.price, name: `${outcome.name} ${outcome.point}` },
-                        option2: { odds: outcome.price, name: `${outcome.name} ${outcome.point}` }
+                        option1: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` },
+                        option2: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` }
                       };
                     });
                     break;
@@ -232,8 +232,8 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     market.outcomes?.forEach((outcome: any) => {
                       const altSpreadKey = `${bookmaker.title}_${outcome.name}_${outcome.point || 0}`;
                       processedGame.marketsByType.alternate_spreads[altSpreadKey] = {
-                        option1: { odds: outcome.price, name: `${outcome.name} ${outcome.point}` },
-                        option2: { odds: outcome.price, name: `${outcome.name} ${outcome.point}` }
+                        option1: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` },
+                        option2: { odds: outcome.price, name: `${outcome.name} ${formatSpreadPoint(outcome.point || 0)}` }
                       };
                     });
                     break;
@@ -588,7 +588,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                                   {bet.bookmaker}
                                 </span>
                                 <span className="text-sm font-mono text-blue-300">
-                                  {bet.odds > 0 ? `+${Math.floor(Math.abs(bet.odds)) + 100}` : `-${Math.floor(Math.abs(bet.odds)) + 100}`}
+                                  {formatAmericanOdds(bet.odds)}
                                 </span>
                               </div>
                               <div className="text-sm space-y-1">
@@ -599,7 +599,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                                 <div className="flex justify-between">
                                   <span className="text-gray-300">Odds:</span>
                                   <span className="font-bold text-blue-300">
-                                    {bet.odds > 0 ? `+${Math.floor(Math.abs(bet.odds)) + 100}` : `-${Math.floor(Math.abs(bet.odds)) + 100}`}
+                                    {formatAmericanOdds(bet.odds)}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -706,6 +706,12 @@ function getBetTypeIcon(betType: string): string {
     case 'player_props': return '🏃';
     default: return '🎲';
   }
+}
+
+// Format spread points with proper +/- signs
+function formatSpreadPoint(point: number): string {
+  if (point === 0) return '0';
+  return point > 0 ? `+${point}` : `${point}`;
 }
 
 // Enhanced arbitrage calculation for different bet types
