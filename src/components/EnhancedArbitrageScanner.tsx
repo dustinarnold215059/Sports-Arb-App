@@ -336,6 +336,23 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       
       allGames.forEach(game => {
         selectedBetTypes.forEach(betType => {
+          // Skip draw risk bet types for sports that can have draws
+          const drawRiskBetTypes = [
+            'moneyline', 'h2h', 'match_winner', 'full_time_result', 'regulation_time',
+            'three_way', '3way', 'match_result', 'game_winner', 'outright', 'winner',
+            'head_to_head', 'match_odds', 'ft_result', 'match_betting'
+          ];
+          
+          const isDrawRiskBet = drawRiskBetTypes.some(type => 
+            betType.toLowerCase().includes(type.toLowerCase()) || 
+            betType.toLowerCase() === type.toLowerCase()
+          );
+          
+          if (hasDrawRisk(game.sport_key || '') && isDrawRiskBet) {
+            console.log(`🚫 Skipping ${betType} for ${game.sport_key} - draw risk sport`);
+            return; // Skip this bet type for this sport
+          }
+          
           const marketData = game.marketsByType[betType];
           if (marketData && Object.keys(marketData).length >= 2) {
             
@@ -380,6 +397,14 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                 opportunity.betType = betType;
                 found.push(opportunity);
               }
+            } else if (opportunity.riskWarning) {
+              // Log filtered opportunities for debugging
+              console.log(`🚫 Filtered opportunity: ${opportunity.riskWarning}`, {
+                sport: game.sport_key,
+                betType,
+                game: gameName,
+                hasDrawRisk: hasDrawRisk(game.sport_key || '')
+              });
             }
           }
         });
@@ -717,12 +742,47 @@ function formatSpreadPoint(point: number): string {
 
 // Check if sport has draw risk (3-way markets)
 function hasDrawRisk(sportKey: string): boolean {
-  const drawRiskSports = [
+  // All soccer leagues have draw risk
+  const soccerLeagues = [
     'soccer_epl', 'soccer_spain_la_liga', 'soccer_usa_mls', 'soccer_germany_bundesliga',
     'soccer_italy_serie_a', 'soccer_france_ligue_one', 'soccer_uefa_champs_league',
-    'soccer_fifa_world_cup', 'soccer_uefa_european_championship'
+    'soccer_fifa_world_cup', 'soccer_uefa_european_championship', 'soccer_conmebol_copa_libertadores',
+    'soccer_uefa_europa_league', 'soccer_fa_cup', 'soccer_league_cup', 'soccer_carabao_cup',
+    'soccer_brazil_campeonato', 'soccer_argentina_primera_division', 'soccer_netherlands_eredivisie',
+    'soccer_portugal_primeira_liga', 'soccer_belgium_first_div', 'soccer_austria_bundesliga',
+    'soccer_denmark_superliga', 'soccer_finland_veikkausliiga', 'soccer_norway_eliteserien',
+    'soccer_sweden_allsvenskan', 'soccer_switzerland_superleague', 'soccer_turkey_super_league',
+    'soccer_greece_super_league', 'soccer_russia_premier_league', 'soccer_poland_ekstraklasa',
+    'soccer_czech_republic_1', 'soccer_croatia_1hnl', 'soccer_serbia_superliga',
+    'soccer_ukraine_premier_league', 'soccer_romania_liga_1', 'soccer_bulgaria_a_group',
+    'soccer_hungary_nb_i', 'soccer_slovakia_super_liga', 'soccer_slovenia_prvaliga',
+    'soccer_estonia_meistriliiga', 'soccer_latvia_virsliga', 'soccer_lithuania_a_lyga',
+    'soccer_albania_superliga', 'soccer_armenia_premier_league', 'soccer_azerbaijan_premier_league',
+    'soccer_belarus_premier_league', 'soccer_bosnia_premier_league', 'soccer_cyprus_1_division',
+    'soccer_faroe_islands_1_division', 'soccer_georgia_erovnuli_liga', 'soccer_gibraltar_national_league',
+    'soccer_iceland_urvalsdeild', 'soccer_kazakhstan_premier_league', 'soccer_kosovo_superliga',
+    'soccer_liechtenstein_cup', 'soccer_luxembourg_national_division', 'soccer_malta_premier_league',
+    'soccer_moldova_national_division', 'soccer_monaco_ligue_1', 'soccer_montenegro_1_cfl',
+    'soccer_northern_ireland_premiership', 'soccer_republic_of_ireland_premier_division',
+    'soccer_san_marino_campionato', 'soccer_scotland_premiership', 'soccer_wales_premier_league'
   ];
-  return drawRiskSports.some(sport => sportKey.includes('soccer'));
+  
+  // Cricket has draw risk (Test matches can end in draws)
+  const cricketFormats = [
+    'cricket_test_match', 'cricket_county_championship', 'cricket_sheffield_shield',
+    'cricket_first_class', 'cricket_four_day'
+  ];
+  
+  // Some other sports with potential draw outcomes
+  const otherDrawRiskSports = [
+    'rugby_league', 'rugby_union', 'australian_rules_football'
+  ];
+  
+  const allDrawRiskSports = [...soccerLeagues, ...cricketFormats, ...otherDrawRiskSports];
+  
+  return allDrawRiskSports.some(sport => sportKey.toLowerCase().includes(sport.toLowerCase())) ||
+         sportKey.toLowerCase().includes('soccer') ||
+         sportKey.toLowerCase().includes('football') && !sportKey.toLowerCase().includes('american');
 }
 
 // Check if spread arbitrage is valid (opposing spreads)
@@ -828,8 +888,17 @@ function findBestArbitrageOpportunityForBetType(
   
   // Validate arbitrage conditions before calculating
   
-  // 1. Check for draw risk sports - only allow 2-outcome markets for true arbitrage
-  if (hasDrawRisk(sportKey) && (betType === 'moneyline' || betType === 'h2h')) {
+  // 1. Check for draw risk sports - filter out bet types that can have draws
+  const drawRiskBetTypes = [
+    'moneyline', 'h2h', 'match_winner', 'full_time_result', 'regulation_time',
+    'three_way', '3way', 'match_result', 'game_winner', 'outright', 'winner',
+    'head_to_head', 'match_odds', 'ft_result', 'match_betting'
+  ];
+  
+  if (hasDrawRisk(sportKey) && drawRiskBetTypes.some(type => 
+    betType.toLowerCase().includes(type.toLowerCase()) || 
+    betType.toLowerCase() === type.toLowerCase()
+  )) {
     return {
       isArbitrage: false,
       profitMargin: 0,
@@ -840,7 +909,7 @@ function findBestArbitrageOpportunityForBetType(
       team1: bestOption1.name,
       team2: bestOption2.name,
       totalBookmakers: bookmakers.length,
-      riskWarning: 'Draw risk: This sport allows draws which invalidates 2-outcome arbitrage'
+      riskWarning: `Draw risk: ${betType} bets in this sport can end in draws/ties, invalidating 2-outcome arbitrage`
     };
   }
   
