@@ -168,30 +168,41 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     break;
                     
                   case 'spreads':
-                    // Group spread outcomes by point value
-                    const spreadsByPoint: { [point: string]: any[] } = {};
+                    // Group spread outcomes by absolute point value to find opposing spreads
+                    const spreadsByAbsPoint: { [absPoint: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const point = outcome.point?.toString() || '0';
-                      if (!spreadsByPoint[point]) {
-                        spreadsByPoint[point] = [];
+                      const point = outcome.point || 0;
+                      const absPoint = Math.abs(point).toString();
+                      if (!spreadsByAbsPoint[absPoint]) {
+                        spreadsByAbsPoint[absPoint] = [];
                       }
-                      spreadsByPoint[point].push(outcome);
+                      spreadsByAbsPoint[absPoint].push({...outcome, originalPoint: point});
                     });
                     
-                    // Create arbitrage-ready spread markets
-                    Object.entries(spreadsByPoint).forEach(([point, outcomes]) => {
+                    // Create arbitrage-ready spread markets with exact opposing spreads
+                    Object.entries(spreadsByAbsPoint).forEach(([absPoint, outcomes]) => {
                       if (outcomes.length === 2) {
-                        const spreadKey = `${bookmaker.title}_${point}`;
-                        processedGame.marketsByType.spread[spreadKey] = {
-                          option1: { 
-                            odds: outcomes[0].price, 
-                            name: `${outcomes[0].name} ${formatSpreadPoint(parseFloat(point))}` 
-                          },
-                          option2: { 
-                            odds: outcomes[1].price, 
-                            name: `${outcomes[1].name} ${formatSpreadPoint(-parseFloat(point))}` 
-                          }
-                        };
+                        // Sort outcomes to ensure we have positive and negative spreads
+                        outcomes.sort((a, b) => a.originalPoint - b.originalPoint);
+                        const negativeSpread = outcomes[0]; // Should be negative or smaller
+                        const positiveSpread = outcomes[1]; // Should be positive or larger
+                        
+                        // Verify we have actual opposing spreads
+                        if (Math.abs(negativeSpread.originalPoint + positiveSpread.originalPoint) < 0.1) {
+                          const spreadKey = `${bookmaker.title}_${absPoint}`;
+                          processedGame.marketsByType.spread[spreadKey] = {
+                            option1: { 
+                              odds: positiveSpread.price, 
+                              name: `${positiveSpread.name} ${formatSpreadPoint(positiveSpread.originalPoint)}` 
+                            },
+                            option2: { 
+                              odds: negativeSpread.price, 
+                              name: `${negativeSpread.name} ${formatSpreadPoint(negativeSpread.originalPoint)}` 
+                            }
+                          };
+                        } else {
+                          console.log(`⚠️ Skipping non-opposing spreads: ${negativeSpread.originalPoint} and ${positiveSpread.originalPoint}`);
+                        }
                       }
                     });
                     break;
@@ -303,30 +314,41 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
                     break;
 
                   case 'alternate_spreads': // Alternative spreads
-                    // Group alternate spread outcomes by point value
-                    const altSpreadsByPoint: { [point: string]: any[] } = {};
+                    // Group alternate spread outcomes by absolute point value to find opposing spreads
+                    const altSpreadsByAbsPoint: { [absPoint: string]: any[] } = {};
                     market.outcomes?.forEach((outcome: any) => {
-                      const point = outcome.point?.toString() || '0';
-                      if (!altSpreadsByPoint[point]) {
-                        altSpreadsByPoint[point] = [];
+                      const point = outcome.point || 0;
+                      const absPoint = Math.abs(point).toString();
+                      if (!altSpreadsByAbsPoint[absPoint]) {
+                        altSpreadsByAbsPoint[absPoint] = [];
                       }
-                      altSpreadsByPoint[point].push(outcome);
+                      altSpreadsByAbsPoint[absPoint].push({...outcome, originalPoint: point});
                     });
                     
-                    // Create arbitrage-ready alternate spread markets
-                    Object.entries(altSpreadsByPoint).forEach(([point, outcomes]) => {
+                    // Create arbitrage-ready alternate spread markets with exact opposing spreads
+                    Object.entries(altSpreadsByAbsPoint).forEach(([absPoint, outcomes]) => {
                       if (outcomes.length === 2) {
-                        const altSpreadKey = `${bookmaker.title}_alt_${point}`;
-                        processedGame.marketsByType.alternate_spreads[altSpreadKey] = {
-                          option1: { 
-                            odds: outcomes[0].price, 
-                            name: `${outcomes[0].name} ${formatSpreadPoint(parseFloat(point))}` 
-                          },
-                          option2: { 
-                            odds: outcomes[1].price, 
-                            name: `${outcomes[1].name} ${formatSpreadPoint(-parseFloat(point))}` 
-                          }
-                        };
+                        // Sort outcomes to ensure we have positive and negative spreads
+                        outcomes.sort((a, b) => a.originalPoint - b.originalPoint);
+                        const negativeSpread = outcomes[0]; // Should be negative or smaller
+                        const positiveSpread = outcomes[1]; // Should be positive or larger
+                        
+                        // Verify we have actual opposing spreads
+                        if (Math.abs(negativeSpread.originalPoint + positiveSpread.originalPoint) < 0.1) {
+                          const altSpreadKey = `${bookmaker.title}_alt_${absPoint}`;
+                          processedGame.marketsByType.alternate_spreads[altSpreadKey] = {
+                            option1: { 
+                              odds: positiveSpread.price, 
+                              name: `${positiveSpread.name} ${formatSpreadPoint(positiveSpread.originalPoint)}` 
+                            },
+                            option2: { 
+                              odds: negativeSpread.price, 
+                              name: `${negativeSpread.name} ${formatSpreadPoint(negativeSpread.originalPoint)}` 
+                            }
+                          };
+                        } else {
+                          console.log(`⚠️ Skipping non-opposing alternate spreads: ${negativeSpread.originalPoint} and ${positiveSpread.originalPoint}`);
+                        }
                       }
                     });
                     break;
@@ -905,11 +927,12 @@ function isValidSpreadArbitrage(option1Name: string, option2Name: string, betTyp
     return true; // Not a spread bet, no validation needed
   }
   
-  // Extract spread values from option names
+  // Extract spread values from option names - handle multiple formats
   const spread1Match = option1Name.match(/([+-]?\d+\.?\d*)/);
   const spread2Match = option2Name.match(/([+-]?\d+\.?\d*)/);
   
   if (!spread1Match || !spread2Match) {
+    console.log(`❌ Spread validation failed: Cannot extract spread values from "${option1Name}" and "${option2Name}"`);
     return false; // Can't determine spread values
   }
   
@@ -920,7 +943,64 @@ function isValidSpreadArbitrage(option1Name: string, option2Name: string, betTyp
   const areOpposing = Math.abs(spread1 + spread2) < 0.1; // Allow small floating point differences
   const differentSigns = (spread1 > 0 && spread2 < 0) || (spread1 < 0 && spread2 > 0);
   
-  return areOpposing && differentSigns;
+  const isValid = areOpposing && differentSigns;
+  
+  if (!isValid) {
+    console.log(`❌ Invalid spread arbitrage: ${option1Name} (${spread1}) vs ${option2Name} (${spread2}) - not exact opposites`);
+  } else {
+    console.log(`✅ Valid spread arbitrage: ${option1Name} (${spread1}) vs ${option2Name} (${spread2})`);
+  }
+  
+  return isValid;
+}
+
+// Enhanced validation for spread markets from different bookmakers
+function validateSpreadMarketCombination(market1: any, market2: any, betType: string): { isValid: boolean; reason?: string } {
+  if (betType !== 'spread' && betType !== 'alternate_spreads') {
+    return { isValid: true };
+  }
+  
+  // Both markets must have option1 and option2
+  if (!market1?.option1 || !market1?.option2 || !market2?.option1 || !market2?.option2) {
+    return { isValid: false, reason: 'Missing spread options in one or both markets' };
+  }
+  
+  // Extract spread values from all options
+  const extractSpread = (name: string): number | null => {
+    const match = name.match(/([+-]?\d+\.?\d*)/);
+    return match ? parseFloat(match[1]) : null;
+  };
+  
+  const m1s1 = extractSpread(market1.option1.name);
+  const m1s2 = extractSpread(market1.option2.name);
+  const m2s1 = extractSpread(market2.option1.name);
+  const m2s2 = extractSpread(market2.option2.name);
+  
+  if (m1s1 === null || m1s2 === null || m2s1 === null || m2s2 === null) {
+    return { isValid: false, reason: 'Cannot extract spread values from option names' };
+  }
+  
+  // Check if any combination creates valid opposing spreads
+  const validCombinations = [
+    { spread1: m1s1, spread2: m2s1, names: [market1.option1.name, market2.option1.name] },
+    { spread1: m1s1, spread2: m2s2, names: [market1.option1.name, market2.option2.name] },
+    { spread1: m1s2, spread2: m2s1, names: [market1.option2.name, market2.option1.name] },
+    { spread1: m1s2, spread2: m2s2, names: [market1.option2.name, market2.option2.name] }
+  ];
+  
+  for (const combo of validCombinations) {
+    const areOpposing = Math.abs(combo.spread1 + combo.spread2) < 0.1;
+    const differentSigns = (combo.spread1 > 0 && combo.spread2 < 0) || (combo.spread1 < 0 && combo.spread2 > 0);
+    
+    if (areOpposing && differentSigns) {
+      return { isValid: true };
+    }
+  }
+  
+  return { 
+    isValid: false, 
+    reason: `No valid spread combination found. Spreads: [${m1s1}, ${m1s2}] vs [${m2s1}, ${m2s2}]` 
+  };
 }
 
 // Enhanced arbitrage calculation for different bet types
@@ -1028,19 +1108,49 @@ function findBestArbitrageOpportunityForBetType(
   }
   
   // 2. Validate spread arbitrage (must have opposing spreads)
-  if (!isValidSpreadArbitrage(bestOption1.name, bestOption2.name, betType)) {
-    return {
-      isArbitrage: false,
-      profitMargin: 0,
-      guaranteedProfit: 0,
-      totalStake,
-      bets: [],
-      game: gameName,
-      team1: bestOption1.name,
-      team2: bestOption2.name,
-      totalBookmakers: bookmakers.length,
-      riskWarning: 'Invalid spread: Both spreads must be opposing (e.g., +6.5 vs -6.5)'
+  if (betType === 'spread' || betType === 'alternate_spreads') {
+    // Enhanced spread validation - check if we have valid opposing spreads
+    if (!isValidSpreadArbitrage(bestOption1.name, bestOption2.name, betType)) {
+      return {
+        isArbitrage: false,
+        profitMargin: 0,
+        guaranteedProfit: 0,
+        totalStake,
+        bets: [],
+        game: gameName,
+        team1: bestOption1.name,
+        team2: bestOption2.name,
+        totalBookmakers: bookmakers.length,
+        riskWarning: `Invalid spread: Spreads must be exact opposites (e.g., +6.5 vs -6.5). Found: ${bestOption1.name} vs ${bestOption2.name}`
+      };
+    }
+    
+    // Additional validation to prevent scenarios like Over 6.5 vs Under 5.5
+    const extractSpread = (name: string): number | null => {
+      const match = name.match(/([+-]?\d+\.?\d*)/);
+      return match ? parseFloat(match[1]) : null;
     };
+    
+    const spread1 = extractSpread(bestOption1.name);
+    const spread2 = extractSpread(bestOption2.name);
+    
+    if (spread1 !== null && spread2 !== null) {
+      // Check if spreads are not opposing (like 6.5 and 5.5 instead of 6.5 and -6.5)
+      if ((spread1 > 0 && spread2 > 0) || (spread1 < 0 && spread2 < 0)) {
+        return {
+          isArbitrage: false,
+          profitMargin: 0,
+          guaranteedProfit: 0,
+          totalStake,
+          bets: [],
+          game: gameName,
+          team1: bestOption1.name,
+          team2: bestOption2.name,
+          totalBookmakers: bookmakers.length,
+          riskWarning: `Invalid spread combination: Both spreads are on the same side (${spread1} and ${spread2}). Need opposing spreads.`
+        };
+      }
+    }
   }
 
   // Check if arbitrage exists
