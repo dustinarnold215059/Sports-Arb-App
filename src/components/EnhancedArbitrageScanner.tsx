@@ -554,14 +554,20 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       // Find arbitrage opportunities across selected bet types
       const found: ArbitrageOpportunity[] = [];
       
-      console.log(`🔍 DEBUGGING: Processing ${finalGames.length} games for arbitrage...`);
+      console.log(`🔍 Processing ${finalGames.length} games for arbitrage...`);
       
       finalGames.forEach((game, gameIndex) => {
-        console.log(`🎮 Game ${gameIndex + 1}: ${game.game}`, {
-          totalMarkets: game.totalMarkets || 0,
-          bookmakers: game.bookmakers?.length || 0,
-          marketsByType: Object.keys(game.marketsByType || {})
-        });
+        // Only log games that might have opportunities
+        if (game.bookmakers?.length >= 2) {
+          console.log(`🎮 Game ${gameIndex + 1}: ${game.game}`, {
+            sport: game.sport_key,
+            totalMarkets: game.totalMarkets || 0,
+            bookmakers: game.bookmakers?.length || 0,
+            availableMarkets: Object.keys(game.marketsByType || {}).filter(key => 
+              Object.keys(game.marketsByType[key] || {}).length >= 2
+            )
+          });
+        }
         selectedBetTypes.forEach(betType => {
           // Skip draw risk bet types for sports that can have draws
           const drawRiskBetTypes = [
@@ -581,11 +587,10 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
           }
           
           const marketData = game.marketsByType[betType];
-          console.log(`🎯 Processing ${betType} for ${game.game}:`, {
-            hasMarketData: !!marketData,
-            bookmakerCount: marketData ? Object.keys(marketData).length : 0,
-            bookmakers: marketData ? Object.keys(marketData) : []
-          });
+          // Only log if there's potential for arbitrage
+          if (marketData && Object.keys(marketData).length >= 2) {
+            console.log(`🎯 ${betType} for ${game.game}: ${Object.keys(marketData).length} bookmakers`);
+          }
           
           if (marketData && Object.keys(marketData).length >= 2) {
             
@@ -706,12 +711,10 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
               );
             }
             
-            console.log(`📊 Opportunity result for ${betType}:`, {
-              isArbitrage: opportunity.isArbitrage,
-              profitMargin: opportunity.profitMargin,
-              guaranteedProfit: opportunity.guaranteedProfit,
-              totalBets: opportunity.bets.length
-            });
+            // Only log successful arbitrage opportunities
+            if (opportunity.isArbitrage) {
+              console.log(`💰 ARBITRAGE FOUND: ${betType} - ${opportunity.profitMargin.toFixed(2)}% profit`);
+            }
             
             if (opportunity.isArbitrage) {
               // Check if same sportsbook is on both sides

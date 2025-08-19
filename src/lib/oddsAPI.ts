@@ -75,6 +75,11 @@ export const THE_ODDS_API_SPORTS = {
   'ATP Tennis': 'tennis_atp',
   'WTA Tennis': 'tennis_wta',
   
+  // Combat Sports
+  'MMA': 'mma_mixed_martial_arts',
+  'UFC': 'mma_mixed_martial_arts',
+  'Boxing': 'boxing_boxing',
+  
   // Other Sports
   'Aussie Rules': 'aussierules_afl',
   Cricket: 'cricket_icc_world_cup',
