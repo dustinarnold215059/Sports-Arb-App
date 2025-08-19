@@ -13,20 +13,21 @@ const OPTIMIZED_CONFIG = {
   BOOKMAKERS: 'draftkings,fanduel,betmgm,caesars,pointsbet,betrivers' // Reliable major bookmakers
 };
 
-// Sport-specific market configurations
+// Start with very conservative sport-specific market configurations
+// Many sports may be out of season or have limited markets available
 const SPORT_MARKET_CONFIG: Record<string, string> = {
-  'americanfootball_nfl': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
-  'americanfootball_ncaaf': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals',
-  'basketball_nba': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
-  'basketball_ncaab': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals',
-  'baseball_mlb': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
-  'icehockey_nhl': 'h2h,spreads,totals,team_totals,alternate_spreads,alternate_totals,player_props',
-  'soccer_epl': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
-  'soccer_spain_la_liga': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
-  'soccer_usa_mls': 'h2h,spreads,totals,btts,draw_no_bet,team_totals',
-  'mma_mixed_martial_arts': 'h2h,outrights',
-  'tennis_wta': 'h2h,spreads,totals',
-  'tennis_atp': 'h2h,spreads,totals'
+  'americanfootball_nfl': 'h2h,spreads,totals',
+  'americanfootball_ncaaf': 'h2h,spreads,totals',
+  'basketball_nba': 'h2h,spreads,totals',
+  'basketball_ncaab': 'h2h,spreads,totals',
+  'baseball_mlb': 'h2h,spreads,totals',
+  'icehockey_nhl': 'h2h,spreads,totals',
+  'soccer_epl': 'h2h',
+  'soccer_spain_la_liga': 'h2h',
+  'soccer_usa_mls': 'h2h',
+  'mma_mixed_martial_arts': 'h2h',
+  'tennis_wta': 'h2h',
+  'tennis_atp': 'h2h'
 };
 
 export async function GET(request: NextRequest) {
@@ -107,50 +108,71 @@ export async function GET(request: NextRequest) {
       } else if (response.status === 404) {
         errorMessage = `Sport not found: ${sport}`;
       } else if (response.status === 422) {
-        // Try fallback with basic markets
-        if (markets !== OPTIMIZED_CONFIG.MARKETS_FALLBACK) {
-          console.log(`⚠️ 422 error with sport-specific markets, trying fallback for ${sport}`);
+        console.log(`⚠️ 422 error for ${sport} with markets: ${markets}`);
+        
+        // Try multiple fallback strategies
+        const fallbackStrategies = [
+          'h2h', // Most basic - just moneyline
+          '', // No markets parameter at all
+        ];
+        
+        for (const fallbackMarkets of fallbackStrategies) {
+          if (fallbackMarkets === markets) continue; // Skip if same as what we tried
           
-          const fallbackUrl = `${OPTIMIZED_CONFIG.BASE_URL}/sports/${sport}/odds/` +
+          console.log(`⚡ Trying fallback strategy for ${sport}: ${fallbackMarkets || 'no markets param'}`);
+          
+          let fallbackUrl = `${OPTIMIZED_CONFIG.BASE_URL}/sports/${sport}/odds/` +
             `?apiKey=${apiKey}` +
-            `&regions=${OPTIMIZED_CONFIG.REGIONS}` +
-            `&markets=${OPTIMIZED_CONFIG.MARKETS_FALLBACK}` +
-            `&oddsFormat=${OPTIMIZED_CONFIG.ODDS_FORMAT}` +
+            `&regions=${OPTIMIZED_CONFIG.REGIONS}`;
+          
+          // Only add markets parameter if not empty
+          if (fallbackMarkets) {
+            fallbackUrl += `&markets=${fallbackMarkets}`;
+          }
+          
+          fallbackUrl += `&oddsFormat=${OPTIMIZED_CONFIG.ODDS_FORMAT}` +
             `&dateFormat=${OPTIMIZED_CONFIG.DATE_FORMAT}` +
-            `&bookmakers=${OPTIMIZED_CONFIG.BOOKMAKERS}` +
+            `&bookmakers=draftkings,fanduel,betmgm` + // Reduce to most reliable bookmakers
             `&commenceTimeFrom=${new Date().toISOString()}` +
-            `&commenceTimeTo=${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()}`;
+            `&commenceTimeTo=${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()}`; // Expand to 2 weeks
           
-          const fallbackResponse = await fetch(fallbackUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': 'SportsArb-Optimized/2.0',
-              'Accept-Encoding': 'gzip, deflate, br'
-            },
-            signal: AbortSignal.timeout(15000)
-          });
-          
-          if (fallbackResponse.ok) {
-            const fallbackData = await fallbackResponse.json();
-            const processedData = processOptimizedOddsData(fallbackData, sport);
-            
-            console.log(`✅ Fallback successful for ${sport}:`, {
-              games: processedData.games.length,
-              markets: 'basic (h2h,spreads,totals)'
+          try {
+            const fallbackResponse = await fetch(fallbackUrl, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'SportsArb-Fallback/1.0',
+                'Accept-Encoding': 'gzip, deflate, br'
+              },
+              signal: AbortSignal.timeout(15000)
             });
             
-            return NextResponse.json({
-              ...processedData,
-              sport,
-              generated_at: new Date().toISOString(),
-              apiUsage: {
-                remainingRequests: fallbackResponse.headers.get('X-Requests-Remaining'),
-                requestsUsed: fallbackResponse.headers.get('X-Requests-Used'),
-                responseTime: Date.now() - startTime,
-                optimization: 'fallback-basic-markets'
-              }
-            });
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json();
+              const processedData = processOptimizedOddsData(fallbackData, sport);
+              
+              console.log(`✅ Fallback successful for ${sport}:`, {
+                games: processedData.games.length,
+                strategy: fallbackMarkets || 'no-markets-param',
+                url: fallbackUrl.replace(apiKey, 'HIDDEN')
+              });
+              
+              return NextResponse.json({
+                ...processedData,
+                sport,
+                generated_at: new Date().toISOString(),
+                apiUsage: {
+                  remainingRequests: fallbackResponse.headers.get('X-Requests-Remaining'),
+                  requestsUsed: fallbackResponse.headers.get('X-Requests-Used'),
+                  responseTime: Date.now() - startTime,
+                  optimization: `fallback-${fallbackMarkets || 'no-markets'}`
+                }
+              });
+            } else {
+              console.log(`❌ Fallback ${fallbackMarkets || 'no-markets'} failed: ${fallbackResponse.status}`);
+            }
+          } catch (fallbackError) {
+            console.log(`❌ Fallback ${fallbackMarkets || 'no-markets'} error:`, fallbackError);
           }
         }
         

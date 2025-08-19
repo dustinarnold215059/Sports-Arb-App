@@ -3,6 +3,7 @@
 import { EnhancedArbitrageScanner } from '@/components/EnhancedArbitrageScanner';
 import { APITest } from '@/components/APITest';
 import { APIKeyTest } from '@/components/APIKeyTest';
+import { DebugAPITest } from '@/components/DebugAPITest';
 import { SupportedSportsbooks } from '@/components/SupportedSportsbooks';
 import { Navigation } from '@/components/Navigation';
 import { SPORTSBOOKS } from '@/lib/arbitrage';
@@ -157,6 +158,7 @@ export default function ArbitragePage() {
             {activeTab === 'api-test' && (
               <div className="space-y-6">
                 <APIKeyTest />
+                <DebugAPITest />
                 <APITest />
               </div>
             )}
