@@ -102,27 +102,22 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Build the event-specific URL
-    let markets = EVENT_API_CONFIG.MARKETS;
+    // The Odds API structure is: /v4/sports/{sport}/odds NOT /v4/sports/{sport}/events/{id}/odds
+    // We need to fetch all odds for the sport and filter by event ID
     
-    // If player props are requested and sport supports them, include all available props
-    if (includePlayerProps && SPORT_PLAYER_PROPS[sport]) {
-      const sportProps = SPORT_PLAYER_PROPS[sport].join(',');
-      markets = `${EVENT_API_CONFIG.MARKETS},${sportProps}`;
-    }
-
-    const url = `${EVENT_API_CONFIG.BASE_URL}/sports/${sport}/events/${eventId}/odds/` +
+    const url = `${EVENT_API_CONFIG.BASE_URL}/sports/${sport}/odds/` +
       `?apiKey=${apiKey}` +
       `&regions=${EVENT_API_CONFIG.REGIONS}` +
-      `&markets=${markets}` +
+      `&markets=${EVENT_API_CONFIG.MARKETS}` +
       `&oddsFormat=${EVENT_API_CONFIG.ODDS_FORMAT}` +
       `&dateFormat=${EVENT_API_CONFIG.DATE_FORMAT}` +
-      `&bookmakers=${EVENT_API_CONFIG.BOOKMAKERS}`;
+      `&bookmakers=${EVENT_API_CONFIG.BOOKMAKERS}` +
+      `&eventIds=${eventId}`; // Filter by specific event ID
 
     console.log('🎯 Event-specific API call:', {
       eventId,
       sport,
-      markets: markets.split(',').length,
+      markets: EVENT_API_CONFIG.MARKETS.split(',').length,
       playerPropsRequested: includePlayerProps,
       sportSupportsProps: !!SPORT_PLAYER_PROPS[sport]
     });
@@ -187,8 +182,21 @@ export async function GET(request: NextRequest) {
     const remainingRequests = response.headers.get('X-Requests-Remaining');
     const requestsUsed = response.headers.get('X-Requests-Used');
     
+    // The API returns an array, filter to find the specific event
+    const gameArray = Array.isArray(data) ? data : [data];
+    const specificGame = gameArray.find((game: any) => game.id === eventId);
+    
+    if (!specificGame) {
+      return NextResponse.json({ 
+        error: `Event ${eventId} not found in API response`,
+        eventId,
+        sport,
+        availableEvents: gameArray.map((g: any) => ({ id: g.id, teams: `${g.away_team} vs ${g.home_team}` }))
+      }, { status: 404 });
+    }
+    
     // Process the detailed event data
-    const processedData = processEventOddsData(data, sport, includePlayerProps);
+    const processedData = processEventOddsData(specificGame, sport, includePlayerProps);
     
     console.log('✅ Event odds processed:', {
       eventId,
