@@ -79,10 +79,12 @@ export default function AuthPage() {
                 <div className="flex items-center gap-3">
                   <div className="text-2xl">💡</div>
                   <div>
-                    <p className="font-semibold text-yellow-400 mb-1">Try Demo Account</p>
+                    <p className="font-semibold text-yellow-400 mb-1">Try Demo Accounts</p>
                     <p className="text-sm text-gray-300">
-                      Email: <span className="font-mono">demo@sportsbetting.com</span><br />
-                      Password: <span className="font-mono">password123</span>
+                      <strong>Admin:</strong> admin@test.com / admin123<br />
+                      <strong>Users:</strong> john@example.com / user123<br />
+                      <span className="ml-12">sarah@example.com / user123</span><br />
+                      <span className="ml-12">mike@example.com / user123</span>
                     </p>
                   </div>
                 </div>

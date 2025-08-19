@@ -73,82 +73,50 @@ class AuthAPI {
   }
 
   async login(email: string, password: string): Promise<{ user: User; token: string }> {
-    await this.delay(500); // Simulate network delay
-    
-    // For demo purposes, use predefined user credentials
-    const demoUsers: Record<string, User> = {
-      'john@example.com': {
-        id: 'user_john',
-        email: 'john@example.com',
-        username: 'john_trader',
-        firstName: 'John',
-        lastName: 'Trader',
-        role: 'premium',
-        subscriptionStatus: 'premium',
-        createdAt: '2024-01-15T00:00:00.000Z',
-        lastLogin: new Date().toISOString(),
-        settings: {
-          theme: 'system',
-          notifications: true,
-          defaultStake: 100,
-          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel']
-        }
-      },
-      'sarah@example.com': {
-        id: 'user_sarah',
-        email: 'sarah@example.com',
-        username: 'sarah_sports',
-        firstName: 'Sarah',
-        lastName: 'Sports',
-        role: 'basic',
-        subscriptionStatus: 'basic',
-        createdAt: '2024-02-01T00:00:00.000Z',
-        lastLogin: new Date().toISOString(),
-        settings: {
-          theme: 'system',
-          notifications: true,
-          defaultStake: 50,
-          preferredBookmakers: ['draftkings', 'betmgm']
-        }
-      },
-      'mike@example.com': {
-        id: 'user_mike',
-        email: 'mike@example.com',
-        username: 'mike_pro',
-        firstName: 'Mike',
-        lastName: 'Pro',
-        role: 'pro',
-        subscriptionStatus: 'pro',
-        createdAt: '2024-03-10T00:00:00.000Z',
-        lastLogin: new Date().toISOString(),
-        settings: {
-          theme: 'system',
-          notifications: true,
-          defaultStake: 200,
-          preferredBookmakers: ['draftkings', 'betmgm', 'fanduel', 'caesars']
-        }
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          identifier: email,
+          password: password,
+          rememberMe: false
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new ValidationError(data.error || 'Login failed');
       }
-    };
 
-    const demoPasswords: Record<string, string> = {
-      'john@example.com': 'user123',
-      'sarah@example.com': 'user123', 
-      'mike@example.com': 'user123'
-    };
+      // Transform the API response to match our User interface
+      const user: User = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        firstName: data.user.firstName || '',
+        lastName: data.user.lastName || '',
+        avatar: data.user.avatar,
+        role: data.user.role as 'admin' | 'premium' | 'basic' | 'pro',
+        subscriptionStatus: (data.user.role === 'admin' ? 'premium' : data.user.role) as 'premium' | 'basic' | 'trial' | 'pro',
+        createdAt: data.user.createdAt || new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        settings: {
+          theme: 'system',
+          notifications: true,
+          defaultStake: data.user.role === 'pro' ? 200 : data.user.role === 'premium' ? 100 : 50,
+          preferredBookmakers: data.user.role === 'pro' ? ['draftkings', 'betmgm', 'fanduel', 'caesars'] : ['draftkings', 'betmgm']
+        }
+      };
 
-    const user = demoUsers[email.toLowerCase()];
-    const validPassword = demoPasswords[email.toLowerCase()];
-
-    if (!user || password !== validPassword) {
-      throw new ValidationError('Invalid email or password');
+      return { user, token: data.sessionToken };
+    } catch (error) {
+      console.error('Database login error:', error);
+      throw error;
     }
-
-    const token = generateSecureToken(64);
-    const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-    
-    this.tokens.set(token, { userId: user.id, expires });
-    
-    return { user, token };
   }
 
   async register(userData: RegisterData): Promise<{ user: User; token: string }> {
