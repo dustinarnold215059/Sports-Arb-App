@@ -53,6 +53,10 @@ export const THE_ODDS_API_SPORTS = {
   
   // Baseball
   MLB: 'baseball_mlb',
+  MiLB: 'baseball_milb', 
+  NPB: 'baseball_npb',
+  KBO: 'baseball_kbo',
+  'NCAA Baseball': 'baseball_ncaa',
   
   // Ice Hockey
   NHL: 'icehockey_nhl',
@@ -65,6 +69,11 @@ export const THE_ODDS_API_SPORTS = {
   'Ligue 1': 'soccer_france_ligue_one',
   'Champions League': 'soccer_uefa_champs_league',
   MLS: 'soccer_usa_mls',
+  'Liga MX': 'soccer_mexico_ligamx',
+  
+  // Tennis
+  'ATP Tennis': 'tennis_atp',
+  'WTA Tennis': 'tennis_wta',
   
   // Other Sports
   'Aussie Rules': 'aussierules_afl',

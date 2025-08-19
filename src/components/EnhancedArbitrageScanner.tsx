@@ -47,6 +47,81 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
   const [selectedBetTypes] = useState<string[]>(['moneyline', 'spread', 'total', 'outright', 'btts', 'draw_no_bet', 'team_totals', 'alternate_spreads', 'alternate_totals', 'player_props']); // All bet types for maximum opportunities
   const [allGameData, setAllGameData] = useState<any[]>([]);
   const [showBetTracker, setShowBetTracker] = useState<{ show: boolean; opportunity?: ArbitrageOpportunity }>({ show: false });
+  const [playerPropsEnabled, setPlayerPropsEnabled] = useState(false);
+  const [loadingPlayerProps, setLoadingPlayerProps] = useState(false);
+  const [playerPropsData, setPlayerPropsData] = useState<Map<string, any>>(new Map());
+
+  // Function to fetch detailed player props for specific events
+  const fetchPlayerPropsForEvent = async (eventId: string, sport: string) => {
+    try {
+      const response = await fetch(`/api/event-odds?eventId=${eventId}&sport=${sport}&playerProps=true`);
+      
+      if (!response.ok) {
+        console.error(`Failed to fetch player props for event ${eventId}:`, response.status);
+        return null;
+      }
+      
+      const data = await response.json();
+      return data.playerProps || {};
+    } catch (error) {
+      console.error(`Error fetching player props for event ${eventId}:`, error);
+      return null;
+    }
+  };
+
+  // Function to enhance games with player props data
+  const enhanceGamesWithPlayerProps = async (games: any[]) => {
+    if (!playerPropsEnabled || games.length === 0) return games;
+
+    setLoadingPlayerProps(true);
+    const newPlayerPropsData = new Map(playerPropsData);
+    
+    // Limit to first 5 games to conserve API calls
+    const gamesToEnhance = games.slice(0, 5);
+    console.log(`🎯 Fetching player props for ${gamesToEnhance.length} games...`);
+    
+    const promises = gamesToEnhance.map(async (game) => {
+      if (!game.id || !game.sport_key) return game;
+      
+      const cacheKey = `${game.id}-${game.sport_key}`;
+      
+      // Check if we already have this data
+      if (newPlayerPropsData.has(cacheKey)) {
+        return { ...game, playerProps: newPlayerPropsData.get(cacheKey) };
+      }
+      
+      // Fetch new player props
+      const playerProps = await fetchPlayerPropsForEvent(game.id, game.sport_key);
+      
+      if (playerProps) {
+        newPlayerPropsData.set(cacheKey, playerProps);
+        return { ...game, playerProps };
+      }
+      
+      return game;
+    });
+    
+    try {
+      const enhancedGames = await Promise.all(promises);
+      setPlayerPropsData(newPlayerPropsData);
+      setLoadingPlayerProps(false);
+      
+      // Replace the enhanced games in the original array
+      const result = games.map((game, index) => {
+        if (index < gamesToEnhance.length) {
+          return enhancedGames[index];
+        }
+        return game;
+      });
+      
+      console.log(`✅ Enhanced ${gamesToEnhance.length} games with player props`);
+      return result;
+    } catch (error) {
+      console.error('Error enhancing games with player props:', error);
+      setLoadingPlayerProps(false);
+      return games;
+    }
+  };
 
   const betTypeOptions = [
     { id: 'moneyline', name: 'Moneyline', description: 'Who wins the game', icon: '🏆' },
@@ -454,10 +529,17 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
         Object.entries(SUPPORTED_SPORTS).find(([, value]) => value === sport)?.[0] || sport
       ));
       
+      // Enhance games with detailed player props if enabled
+      let finalGames = allGames;
+      if (playerPropsEnabled && allGames.length > 0) {
+        console.log('🎯 Enhancing games with detailed player props...');
+        finalGames = await enhanceGamesWithPlayerProps(allGames);
+      }
+
       setTotalGames(totalGamesCount);
-      setAllGameData(allGames);
+      setAllGameData(finalGames);
       
-      if (allGames.length === 0) {
+      if (finalGames.length === 0) {
         const scannedSportNames = result.sportsProcessed
           .map(sport => Object.entries(SUPPORTED_SPORTS).find(([, value]) => value === sport)?.[0] || sport)
           .join(', ');
@@ -470,7 +552,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
       // Find arbitrage opportunities across selected bet types
       const found: ArbitrageOpportunity[] = [];
       
-      allGames.forEach(game => {
+      finalGames.forEach(game => {
         selectedBetTypes.forEach(betType => {
           // Skip draw risk bet types for sports that can have draws
           const drawRiskBetTypes = [
@@ -629,6 +711,19 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
               onChange={(e) => setTotalStake(Number(e.target.value))}
               className="w-24 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="playerPropsToggle"
+              checked={playerPropsEnabled}
+              onChange={(e) => setPlayerPropsEnabled(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+            />
+            <label htmlFor="playerPropsToggle" className="text-sm text-gray-300 cursor-pointer">
+              🎯 Enhanced Player Props {loadingPlayerProps && '(Loading...)'}
+            </label>
           </div>
           <NeonButton
             onClick={scanForOpportunities}
