@@ -954,6 +954,50 @@ function isValidSpreadArbitrage(option1Name: string, option2Name: string, betTyp
   return isValid;
 }
 
+// Check if totals arbitrage is valid (exact same point value)
+function isValidTotalsArbitrage(option1Name: string, option2Name: string, betType: string): boolean {
+  if (betType !== 'total' && betType !== 'alternate_totals') {
+    return true; // Not a totals bet, no validation needed
+  }
+  
+  // Extract point values from option names (Over/Under must have same point value)
+  const point1Match = option1Name.match(/(\d+\.?\d*)/);
+  const point2Match = option2Name.match(/(\d+\.?\d*)/);
+  
+  if (!point1Match || !point2Match) {
+    console.log(`❌ Totals validation failed: Cannot extract point values from "${option1Name}" and "${option2Name}"`);
+    return false; // Can't determine point values
+  }
+  
+  const point1 = parseFloat(point1Match[1]);
+  const point2 = parseFloat(point2Match[1]);
+  
+  // Valid totals arbitrage requires EXACT same point value
+  const exactMatch = Math.abs(point1 - point2) < 0.01; // Very small tolerance for floating point
+  
+  // Check if we have one Over and one Under
+  const isOver1 = option1Name.toLowerCase().includes('over');
+  const isUnder1 = option1Name.toLowerCase().includes('under');
+  const isOver2 = option2Name.toLowerCase().includes('over');
+  const isUnder2 = option2Name.toLowerCase().includes('under');
+  
+  const hasOverAndUnder = (isOver1 && isUnder2) || (isUnder1 && isOver2);
+  
+  const isValid = exactMatch && hasOverAndUnder;
+  
+  if (!isValid) {
+    if (!exactMatch) {
+      console.log(`❌ Invalid totals arbitrage: Different point values ${point1} vs ${point2}. Score between these values would lose both bets.`);
+    } else if (!hasOverAndUnder) {
+      console.log(`❌ Invalid totals arbitrage: Need one Over and one Under, got "${option1Name}" vs "${option2Name}"`);
+    }
+  } else {
+    console.log(`✅ Valid totals arbitrage: ${option1Name} vs ${option2Name} (same point value: ${point1})`);
+  }
+  
+  return isValid;
+}
+
 // Enhanced validation for spread markets from different bookmakers
 function validateSpreadMarketCombination(market1: any, market2: any, betType: string): { isValid: boolean; reason?: string } {
   if (betType !== 'spread' && betType !== 'alternate_spreads') {
@@ -1150,6 +1194,25 @@ function findBestArbitrageOpportunityForBetType(
           riskWarning: `Invalid spread combination: Both spreads are on the same side (${spread1} and ${spread2}). Need opposing spreads.`
         };
       }
+    }
+  }
+
+  // 3. Validate totals arbitrage (must have exact same point value)
+  if (betType === 'total' || betType === 'alternate_totals') {
+    // Enhanced totals validation - check if we have valid Over/Under with same point value
+    if (!isValidTotalsArbitrage(bestOption1.name, bestOption2.name, betType)) {
+      return {
+        isArbitrage: false,
+        profitMargin: 0,
+        guaranteedProfit: 0,
+        totalStake,
+        bets: [],
+        game: gameName,
+        team1: bestOption1.name,
+        team2: bestOption2.name,
+        totalBookmakers: bookmakers.length,
+        riskWarning: `Invalid totals: Over/Under must have exact same point value. Found: ${bestOption1.name} vs ${bestOption2.name}. A score between these values would lose both bets.`
+      };
     }
   }
 
