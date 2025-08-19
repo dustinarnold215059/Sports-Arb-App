@@ -577,8 +577,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
           
           if (hasDrawRisk(game.sport_key || '') && isDrawRiskBet) {
             console.log(`🚫 Skipping ${betType} for ${game.sport_key} - draw risk sport`);
-            // TEMPORARILY DISABLE draw risk filtering to see if this is causing the issue
-            // return; // Skip this bet type for this sport
+            return; // Skip this bet type for this sport
           }
           
           const marketData = game.marketsByType[betType];
@@ -590,17 +589,17 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
           
           if (marketData && Object.keys(marketData).length >= 2) {
             
-            // TEMPORARILY DISABLE totals filtering to see if this is causing the issue
+            // Pre-filter totals markets to only include those with matching point values
             let filteredMarketData = marketData;
-            // if (betType === 'total' || betType === 'alternate_totals') {
-            //   filteredMarketData = filterTotalsMarketsByPointValue(marketData);
+            if (betType === 'total' || betType === 'alternate_totals') {
+              filteredMarketData = filterTotalsMarketsByPointValue(marketData);
               
-            //   // Skip if no valid matching point values found
-            //   if (Object.keys(filteredMarketData).length < 2) {
-            //     console.log(`⚠️ Skipping ${betType} for ${game.game} - no markets with matching point values for valid arbitrage`);
-            //     return;
-            //   }
-            // }
+              // Skip if no valid matching point values found
+              if (Object.keys(filteredMarketData).length < 2) {
+                console.log(`⚠️ Skipping ${betType} for ${game.game} - no markets with matching point values for valid arbitrage`);
+                return;
+              }
+            }
             
             let opportunity: ArbitrageOpportunity;
             
