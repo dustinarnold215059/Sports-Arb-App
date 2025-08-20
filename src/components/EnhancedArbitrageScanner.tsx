@@ -46,7 +46,7 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
   const [scannedSports, setScannedSports] = useState(0);
   const [totalSports, setTotalSports] = useState(0);
   const [activeSports, setActiveSports] = useState<string[]>([]);
-  const [selectedBetTypes] = useState<string[]>(['moneyline', 'spread', 'total', 'outright', 'btts', 'draw_no_bet', 'team_totals', 'alternate_spreads', 'alternate_totals', 'player_props']); // All bet types for maximum opportunities
+  const [selectedBetTypes] = useState<string[]>(['moneyline', 'spread', 'total', 'outright', 'btts', 'draw_no_bet', 'team_totals', 'alternate_spreads', 'alternate_totals']); // Temporarily removed player_props to fix 422 errors
   const [allGameData, setAllGameData] = useState<any[]>([]);
   const [showBetTracker, setShowBetTracker] = useState<{ show: boolean; opportunity?: ArbitrageOpportunity }>({ show: false });
   const [playerPropsEnabled, setPlayerPropsEnabled] = useState(false);
@@ -541,12 +541,13 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
         Object.entries(SUPPORTED_SPORTS).find(([, value]) => value === sport)?.[0] || sport
       ));
       
-      // Enhance games with detailed player props if enabled
+      // TEMPORARILY DISABLE player props to fix 422 errors and get basic arbitrage working
       let finalGames = allGames;
-      if (playerPropsEnabled && allGames.length > 0) {
+      if (false && playerPropsEnabled && allGames.length > 0) {
         console.log('🎯 Enhancing games with detailed player props...');
         finalGames = await enhanceGamesWithPlayerProps(allGames);
       }
+      console.log('⚠️ Player props temporarily disabled to fix 422 errors');
 
       setTotalGames(totalGamesCount);
       setAllGameData(finalGames);
@@ -853,12 +854,12 @@ export function EnhancedArbitrageScanner({ useMockData = false }: EnhancedArbitr
             <input
               type="checkbox"
               id="playerPropsToggle"
-              checked={playerPropsEnabled}
-              onChange={(e) => setPlayerPropsEnabled(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+              checked={false}
+              disabled={true}
+              className="rounded border-gray-300 text-gray-400 shadow-sm cursor-not-allowed opacity-50"
             />
-            <label htmlFor="playerPropsToggle" className="text-sm text-gray-300 cursor-pointer">
-              🎯 Enhanced Player Props {loadingPlayerProps && '(Loading...)'}
+            <label htmlFor="playerPropsToggle" className="text-sm text-gray-400 cursor-not-allowed">
+              🎯 Player Props (Temporarily Disabled - 422 API Errors)
             </label>
           </div>
           <NeonButton
